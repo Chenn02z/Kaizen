@@ -14,6 +14,15 @@ async def db_session():
     """Yield an open session; truncate logs before handing it to the test."""
     async with AsyncSessionLocal() as session:
         await session.execute(text("TRUNCATE TABLE logs, extracted_facts RESTART IDENTITY CASCADE"))
+        # corpus_chunks may not exist yet if the migration hasn't been applied
+        await session.execute(
+            text(
+                "DO $$ BEGIN"
+                " IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'corpus_chunks')"
+                " THEN TRUNCATE TABLE corpus_chunks RESTART IDENTITY CASCADE; END IF;"
+                " END $$"
+            )
+        )
         await session.commit()
         yield session
 

@@ -10,6 +10,9 @@ from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.models import Log
 from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
+from app.extract.schema import ExtractedFacts
+from app.llm.client import complete
+from app.rag.retrieve import retrieve
 from app.telegram.client import send_message
 
 app = FastAPI(title="Kaizen")
@@ -93,6 +96,7 @@ async def webhook(
         return {}
 
     # 5. Persist the log entry and extraction result
+    facts: ExtractedFacts | None = None
     async with AsyncSessionLocal() as session:
         log = Log(telegram_user_id=message.from_.id, text=message.text or "")
         session.add(log)
@@ -114,7 +118,33 @@ async def webhook(
 
         await session.commit()
 
-    # 6. Echo the message back
-    await _send(chat_id=message.chat.id, text=message.text or "")
+    # 6. Generate a grounded coaching reply
+    reply_text = message.text or ""
+    try:
+        habit_str = " ".join(facts.habits) if facts else ""
+        query = f"{message.text or ''} {habit_str}".strip()
+        chunks = await retrieve(query)
+        if chunks:
+            reply_text = await _generate_reply(message.text or "", facts, chunks)
+    except Exception:
+        logger.exception("reply generation failed")
+
+    await _send(chat_id=message.chat.id, text=reply_text)
 
     return {}
+
+
+async def _generate_reply(log_text: str, facts: ExtractedFacts | None, chunks: list) -> str:
+    context = "\n\n---\n\n".join(c.content for c in chunks)
+    system = (
+        "You are Kaizen, a personal behavior-change coach. "
+        "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
+        "Name the technique you are applying. Be concise (2-4 sentences). "
+        f"Techniques available:\n\n{context}"
+    )
+    response = await complete(
+        messages=[{"role": "user", "content": log_text}],
+        system=system,
+        max_tokens=300,
+    )
+    return next(b.text for b in response.content if b.type == "text")

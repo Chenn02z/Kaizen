@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str
     llm_api_key: str
     llm_model: str = "claude-haiku-4-5-20251001"
+    embed_api_key: str
+    embed_model: str = "text-embedding-3-small"
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
