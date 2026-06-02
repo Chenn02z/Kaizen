@@ -1,9 +1,18 @@
+import os
+
 import anthropic
 import openai as _openai
-from langfuse import observe
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import settings
+
+# Langfuse v4 reads directly from os.environ, not from pydantic-settings objects.
+if settings.langfuse_public_key:
+    os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
+    os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
+    os.environ.setdefault("LANGFUSE_BASE_URL", settings.langfuse_host)
+
+from langfuse import observe  # noqa: E402 — must import after env vars are set
 
 _client = anthropic.AsyncAnthropic(api_key=settings.llm_api_key)
 _embed_client = _openai.AsyncOpenAI(api_key=settings.embed_api_key)

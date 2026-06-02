@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -17,6 +18,8 @@ from app.extract.schema import ExtractedFacts
 from app.gamification.stats import UserStats, get_user_stats
 from app.gamification.xp import XPResult, award_xp
 from app.llm.client import complete
+from app.memory.recall import detect_patterns, recall_history
+from app.memory.store import store_facts
 from app.rag.retrieve import retrieve
 from app.telegram.client import send_message
 
@@ -250,6 +253,9 @@ async def webhook(
             session.add(ef)
             await session.flush()
             xp_result = await award_xp(facts, message.from_.id, session)
+            await asyncio.get_running_loop().run_in_executor(
+                None, store_facts, facts, message.text or "", message.from_.id
+            )
         except Exception:
             logger.exception("extraction failed for log_id=%s", log.id)
 
@@ -258,11 +264,17 @@ async def webhook(
     # 6. Generate a grounded coaching reply
     reply_text = message.text or ""
     try:
-        habit_str = " ".join(facts.habits) if facts else ""
-        query = f"{message.text or ''} {habit_str}".strip()
-        chunks = await retrieve(query)
-        if chunks:
-            reply_text = await _generate_reply(message.text or "", facts, chunks)
+        if _is_reflection_query(message.text or ""):
+            reply_text = await _answer_reflection(message.text or "", message.from_.id)
+        else:
+            habit_str = " ".join(facts.habits) if facts else ""
+            query = f"{message.text or ''} {habit_str}".strip()
+            chunks = await retrieve(query)
+            history = await asyncio.get_running_loop().run_in_executor(
+                None, recall_history, query, message.from_.id
+            )
+            if chunks:
+                reply_text = await _generate_reply(message.text or "", facts, chunks, history)
     except Exception:
         logger.exception("reply generation failed")
 
@@ -276,13 +288,61 @@ async def webhook(
     return {}
 
 
-async def _generate_reply(log_text: str, facts: ExtractedFacts | None, chunks: list) -> str:
+_REFLECTION_PATTERNS = [
+    "how was my week",
+    "when do i",
+    "how am i doing",
+    "my patterns",
+    "do i usually",
+    "when do i slip",
+    "when do i usually",
+]
+
+
+def _is_reflection_query(text: str) -> bool:
+    lower = text.lower()
+    return any(p.lower() in lower for p in _REFLECTION_PATTERNS)
+
+
+async def _answer_reflection(query: str, telegram_user_id: int) -> str:
+    history = await asyncio.get_running_loop().run_in_executor(
+        None, recall_history, query, telegram_user_id
+    )
+    patterns = await asyncio.get_running_loop().run_in_executor(
+        None, detect_patterns, telegram_user_id
+    )
+    if not history and not patterns:
+        return "I don't have enough history yet — keep logging and I'll start surfacing patterns!"
+    context = (
+        f"Recent relevant history:\n{history}\n\nAll patterns:\n{patterns}"
+        if patterns
+        else f"Recent relevant history:\n{history}"
+    )
+    context = context[:3000]  # hard cap to keep prompt size bounded
+    system = (
+        "You are Kaizen, a personal behavior-change coach. "
+        "Answer the user's reflection question using ONLY the provided history and patterns. "
+        "Be specific and cite actual entries. Be concise (3-5 sentences)."
+    )
+    response = await complete(
+        messages=[{"role": "user", "content": query}],
+        system=f"{system}\n\n{context}",
+        max_tokens=400,
+    )
+    return next(b.text for b in response.content if b.type == "text")
+
+
+async def _generate_reply(
+    log_text: str, facts: ExtractedFacts | None, chunks: list, history: str = ""
+) -> str:
     context = "\n\n---\n\n".join(c.content for c in chunks)
+    history_section = f"\n\nUser's recent history:\n{history}" if history else ""
     system = (
         "You are Kaizen, a personal behavior-change coach. "
         "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
         "Name the technique you are applying. Be concise (2-4 sentences). "
-        f"Techniques available:\n\n{context}"
+        "If the user's history shows a pattern relevant to this log, reference it. "
+        f"Techniques available:\n\n{context}{history_section}"
     )
     response = await complete(
         messages=[{"role": "user", "content": log_text}],
