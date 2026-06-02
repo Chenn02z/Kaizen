@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Optional
 
@@ -5,11 +6,14 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.models import Log
 from app.db.session import AsyncSessionLocal
+from app.extract.extractor import extract
 from app.telegram.client import send_message
 
 app = FastAPI(title="Kaizen")
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -88,10 +92,26 @@ async def webhook(
     if message.from_.id != settings.allowed_user_id:
         return {}
 
-    # 5. Persist the log entry
+    # 5. Persist the log entry and extraction result
     async with AsyncSessionLocal() as session:
         log = Log(telegram_user_id=message.from_.id, text=message.text or "")
         session.add(log)
+        await session.flush()
+
+        try:
+            facts = await extract(message.text or "")
+            ef = ExtractedFactsModel(
+                log_id=log.id,
+                habits=facts.habits,
+                adherence=facts.adherence.value if facts.adherence else None,
+                mood=facts.mood,
+                trigger=facts.trigger,
+                context=facts.context,
+            )
+            session.add(ef)
+        except Exception:
+            logger.exception("extraction failed for log_id=%s", log.id)
+
         await session.commit()
 
     # 6. Echo the message back

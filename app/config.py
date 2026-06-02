@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     allowed_user_id: int
     database_url: str
     telegram_webhook_secret: str
+    llm_api_key: str
+    llm_model: str = "claude-haiku-4-5-20251001"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
 
 
 settings = Settings()

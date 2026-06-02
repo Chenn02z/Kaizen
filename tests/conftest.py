@@ -13,7 +13,7 @@ from app.main import app
 async def db_session():
     """Yield an open session; truncate logs before handing it to the test."""
     async with AsyncSessionLocal() as session:
-        await session.execute(text("TRUNCATE TABLE logs RESTART IDENTITY"))
+        await session.execute(text("TRUNCATE TABLE logs, extracted_facts RESTART IDENTITY CASCADE"))
         await session.commit()
         yield session
 
