@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, TIMESTAMP, BigInteger, ForeignKey, Text, func
+from sqlalchemy import JSON, TIMESTAMP, BigInteger, ForeignKey, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -48,3 +48,25 @@ class CorpusChunk(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class UserProgress(Base):
+    __tablename__ = "user_progress"
+
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    level: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class HabitProgress(Base):
+    __tablename__ = "habit_progress"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    habit_name: Mapped[str] = mapped_column(Text, nullable=False)
+    xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    level: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+    __table_args__ = (UniqueConstraint("telegram_user_id", "habit_name"),)

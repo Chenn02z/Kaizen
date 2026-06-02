@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+    public_url: str = ""
+    miniapp_secret: str = ""  # protects /me; inject into Mini App HTML at serve time
 
 
 settings = Settings()
