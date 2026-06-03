@@ -1,0 +1,190 @@
+"""Tests for the proactive agent — milestone 6 acceptance criteria."""
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+
+from app.agent.runner import run_tick
+from app.db.models import Intervention
+from app.db.session import AsyncSessionLocal
+from app.main import app
+
+USER_ID = 12345
+
+
+def _make_decide_response(
+    action: str,
+    reason: str,
+    technique: str | None = None,
+    message: str | None = None,
+) -> MagicMock:
+    """Build a fake Anthropic response containing a decide_intervention tool call."""
+    block = MagicMock()
+    block.type = "tool_use"
+    block.name = "decide_intervention"
+    block.input = {
+        "action": action,
+        "reason": reason,
+        "technique": technique,
+        "message": message,
+    }
+    resp = MagicMock()
+    resp.content = [block]
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# AC1: drifting fixture → produces a proactive intervention row, sends message
+# ---------------------------------------------------------------------------
+
+
+async def test_tick_drifting_sends_proactive(db_session, monkeypatch) -> None:
+    """A drifting user gets a proactive nudge and an interventions row."""
+    mock_complete = AsyncMock(
+        return_value=_make_decide_response(
+            action="respond",
+            reason="User has missed gym 3 days in a row",
+            technique="implementation intentions",
+            message="Try scheduling your gym session as a fixed appointment.",
+        )
+    )
+    monkeypatch.setattr("app.agent.graph.complete", mock_complete)
+
+    mock_send = AsyncMock()
+    monkeypatch.setattr("app.agent.runner.send_message", mock_send)
+
+    # Patch memory and RAG to return canned data (avoids real I/O)
+    monkeypatch.setattr(
+        "app.agent.tools._recall_history", lambda q, uid, limit=5: "missed gym 3 days"
+    )
+    monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
+
+    await run_tick(USER_ID)
+
+    # intervention row written
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(Intervention.telegram_user_id == USER_ID)
+        )
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.kind == "proactive"
+    assert row.reason == "User has missed gym 3 days in a row"
+    assert row.technique == "implementation intentions"
+    assert row.message is not None
+
+    # send_message was called
+    mock_send.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# AC2: doing-fine fixture → silence row, no send
+# ---------------------------------------------------------------------------
+
+
+async def test_tick_doing_fine_stays_silent(db_session, monkeypatch) -> None:
+    """A user on track triggers a silence decision with no Telegram message sent."""
+    mock_complete = AsyncMock(
+        return_value=_make_decide_response(
+            action="silent",
+            reason="User completed all habits today",
+        )
+    )
+    monkeypatch.setattr("app.agent.graph.complete", mock_complete)
+
+    mock_send = AsyncMock()
+    monkeypatch.setattr("app.agent.runner.send_message", mock_send)
+
+    monkeypatch.setattr(
+        "app.agent.tools._recall_history",
+        lambda q, uid, limit=5: "completed gym, meditation",
+    )
+    monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
+
+    await run_tick(USER_ID)
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(Intervention.telegram_user_id == USER_ID)
+        )
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].kind == "silence"
+    assert "completed all habits" in rows[0].reason
+
+    # send_message must NOT have been called
+    mock_send.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# AC3: daily cap — second tick is blocked without calling LLM
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_cap_blocks_second_tick(db_session, monkeypatch) -> None:
+    """Pre-insert a proactive row; a second tick must write silence without hitting the LLM."""
+    # Pre-seed a proactive intervention for today
+    async with AsyncSessionLocal() as session:
+        session.add(
+            Intervention(
+                telegram_user_id=USER_ID,
+                kind="proactive",
+                reason="sent earlier today",
+                technique="habit stacking",
+                message="Stack your workout with your morning coffee.",
+            )
+        )
+        await session.commit()
+
+    mock_complete = AsyncMock()
+    monkeypatch.setattr("app.agent.graph.complete", mock_complete)
+
+    mock_send = AsyncMock()
+    monkeypatch.setattr("app.agent.runner.send_message", mock_send)
+
+    await run_tick(USER_ID)
+
+    # LLM must not have been called
+    mock_complete.assert_not_awaited()
+
+    # A silence row with "daily cap reached" must exist
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(
+                Intervention.telegram_user_id == USER_ID,
+                Intervention.kind == "silence",
+            )
+        )
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].reason == "daily cap reached"
+
+    mock_send.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# AC4: /scheduler/tick endpoint rejects requests without the correct secret
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scheduler_tick_endpoint_rejects_without_secret(monkeypatch) -> None:
+    """POST /scheduler/tick with no secret or wrong secret must return 403."""
+    from app import config
+
+    monkeypatch.setattr(config.settings, "scheduler_secret", "correct-secret")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        # No secret at all
+        resp_no_secret = await c.post("/scheduler/tick")
+        assert resp_no_secret.status_code == 403
+
+        # Wrong secret
+        resp_wrong = await c.post("/scheduler/tick?secret=wrong")
+        assert resp_wrong.status_code == 403

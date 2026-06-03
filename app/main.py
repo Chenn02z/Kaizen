@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from app.agent.runner import run_user_message
+from app.agent.scheduler import start_scheduler, stop_scheduler
 from app.config import settings
 from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.models import Log
@@ -20,7 +22,6 @@ from app.gamification.xp import XPResult, award_xp
 from app.llm.client import complete
 from app.memory.recall import detect_patterns, recall_history
 from app.memory.store import store_facts
-from app.rag.retrieve import retrieve
 from app.telegram.client import send_message
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,9 @@ async def _register_menu_button() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     await _register_menu_button()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(title="Kaizen", lifespan=lifespan)
@@ -208,6 +211,18 @@ async def miniapp() -> str:
     return _MINIAPP_HTML.replace("__MINIAPP_SECRET__", settings.miniapp_secret)
 
 
+@app.post("/scheduler/tick")
+async def scheduler_tick(request: Request) -> dict[str, str]:
+    """Debug endpoint: trigger a single proactive tick on demand."""
+    secret = request.query_params.get("secret")
+    if not settings.scheduler_secret or secret != settings.scheduler_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from app.agent.runner import run_tick
+
+    await run_tick(settings.allowed_user_id)
+    return {"status": "ok"}
+
+
 @app.post("/webhook")
 async def webhook(
     request: Request,
@@ -261,20 +276,14 @@ async def webhook(
 
         await session.commit()
 
-    # 6. Generate a grounded coaching reply
+    # 6. Generate a grounded coaching reply via the agent loop
     reply_text = message.text or ""
     try:
-        if _is_reflection_query(message.text or ""):
-            reply_text = await _answer_reflection(message.text or "", message.from_.id)
-        else:
-            habit_str = " ".join(facts.habits) if facts else ""
-            query = f"{message.text or ''} {habit_str}".strip()
-            chunks = await retrieve(query)
-            history = await asyncio.get_running_loop().run_in_executor(
-                None, recall_history, query, message.from_.id
-            )
-            if chunks:
-                reply_text = await _generate_reply(message.text or "", facts, chunks, history)
+        reply_text = await run_user_message(
+            telegram_user_id=message.from_.id,
+            user_text=message.text or "",
+            facts=facts,
+        )
     except Exception:
         logger.exception("reply generation failed")
 

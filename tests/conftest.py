@@ -28,6 +28,14 @@ async def db_session():
                 " END $$"
             )
         )
+        await session.execute(
+            text(
+                "DO $$ BEGIN"
+                " IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'interventions')"
+                " THEN TRUNCATE TABLE interventions RESTART IDENTITY CASCADE; END IF;"
+                " END $$"
+            )
+        )
         await session.commit()
         yield session
 

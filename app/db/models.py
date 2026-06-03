@@ -1,7 +1,16 @@
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, TIMESTAMP, BigInteger, ForeignKey, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    ForeignKey,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -70,3 +79,18 @@ class HabitProgress(Base):
     xp: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     level: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
     __table_args__ = (UniqueConstraint("telegram_user_id", "habit_name"),)
+
+
+class Intervention(Base):
+    __tablename__ = "interventions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # 'proactive' | 'silence'
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    technique: Mapped[str | None] = mapped_column(Text, nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    engaged: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
