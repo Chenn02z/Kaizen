@@ -1,0 +1,10 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--tg-theme-bg-color, #16171d);
+}
+
+#root {
+  min-height: 100svh;
+}

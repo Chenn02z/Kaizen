@@ -2,11 +2,13 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Optional
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent.runner import run_user_message
@@ -27,87 +29,10 @@ from app.telegram.client import send_message
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Mini App HTML
+# Mini App static bundle (built from webapp/ via `npm run build`)
 # ---------------------------------------------------------------------------
 
-_MINIAPP_HTML = """<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kaizen</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body { margin: 0; padding: 16px; background: #1a1a2e; color: #e0e0e0; font-family: sans-serif; }
-    h1 { color: #ffd700; font-size: 1.4em; margin: 0 0 4px; }
-    .subtitle { color: #888; font-size: 0.85em; margin-bottom: 20px; }
-    .level-badge { font-size: 3em; font-weight: bold; color: #ffd700; text-align: center; margin: 12px 0; }
-    .xp-label { font-size: 0.8em; color: #aaa; margin-bottom: 4px; }
-    .bar-bg { background: #333; border-radius: 6px; height: 10px; margin-bottom: 20px; }
-    .bar-fill { background: #ffd700; border-radius: 6px; height: 10px; transition: width 0.5s; }
-    .habit { margin-bottom: 14px; }
-    .habit-name { font-size: 0.9em; text-transform: capitalize; margin-bottom: 3px; }
-    .habit-level { font-size: 0.75em; color: #ffd700; }
-    .habit-bar-fill { background: #4a90d9; border-radius: 6px; height: 6px; }
-    #loading { text-align: center; color: #888; margin-top: 40px; }
-  </style>
-</head>
-<body>
-  <div id="loading">Loading...</div>
-  <div id="app" style="display:none">
-    <h1>⚔️ Kaizen Warrior</h1>
-    <div class="subtitle">Your habit RPG</div>
-    <div class="level-badge" id="level">1</div>
-    <div class="xp-label" id="xp-label">0 XP · 100 to next level</div>
-    <div class="bar-bg"><div class="bar-fill" id="xp-bar" style="width:0%"></div></div>
-    <div id="habits"></div>
-  </div>
-  <script>
-    Telegram.WebApp.expand();
-    fetch('/me?secret=__MINIAPP_SECRET__').then(r => r.json()).then(d => {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
-      document.getElementById('level').textContent = 'Level ' + d.level;
-      const nextLevelXp = 100 * d.level * d.level;
-      const prevLevelXp = 100 * (d.level - 1) * (d.level - 1);
-      const pct = nextLevelXp > prevLevelXp ? Math.round((d.xp - prevLevelXp) / (nextLevelXp - prevLevelXp) * 100) : 100;
-      document.getElementById('xp-label').textContent = d.xp + ' XP · ' + d.xp_to_next_level + ' to next level';
-      document.getElementById('xp-bar').style.width = pct + '%';
-      const habitsEl = document.getElementById('habits');
-      if (d.habits.length === 0) {
-        const p = document.createElement('p');
-        p.style.cssText = 'color:#888;font-size:0.85em';
-        p.textContent = 'Log your first habit to unlock skills!';
-        habitsEl.appendChild(p);
-      } else {
-        d.habits.forEach(h => {
-          const nextHxp = 100 * h.level * h.level;
-          const prevHxp = 100 * (h.level - 1) * (h.level - 1);
-          const hpct = nextHxp > prevHxp ? Math.round((h.xp - prevHxp) / (nextHxp - prevHxp) * 100) : 100;
-          const div = document.createElement('div');
-          div.className = 'habit';
-          const nameDiv = document.createElement('div');
-          nameDiv.className = 'habit-name';
-          nameDiv.textContent = h.name;
-          const lvl = document.createElement('span');
-          lvl.className = 'habit-level';
-          lvl.textContent = ' Lv ' + h.level;
-          nameDiv.appendChild(lvl);
-          const barBg = document.createElement('div');
-          barBg.className = 'bar-bg';
-          const barFill = document.createElement('div');
-          barFill.className = 'habit-bar-fill';
-          barFill.style.width = hpct + '%';
-          barBg.appendChild(barFill);
-          div.appendChild(nameDiv);
-          div.appendChild(barBg);
-          habitsEl.appendChild(div);
-        });
-      }
-    });
-  </script>
-</body>
-</html>"""
+_WEBAPP_DIST = Path(__file__).resolve().parent.parent / "webapp" / "dist"
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +69,15 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title="Kaizen", lifespan=lifespan)
+
+# Hashed JS/CSS for the Mini App. Mounted only when a build exists so the
+# server still starts in environments where webapp/dist hasn't been built.
+if (_WEBAPP_DIST / "assets").is_dir():
+    app.mount(
+        "/miniapp/assets",
+        StaticFiles(directory=_WEBAPP_DIST / "assets"),
+        name="miniapp-assets",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +142,15 @@ async def me(request: Request) -> UserStats:
 
 @app.get("/miniapp", response_class=HTMLResponse)
 async def miniapp() -> str:
-    return _MINIAPP_HTML.replace("__MINIAPP_SECRET__", settings.miniapp_secret)
+    index = _WEBAPP_DIST / "index.html"
+    if not index.is_file():
+        raise HTTPException(
+            status_code=503,
+            detail="Mini App not built. Run `npm run build` in webapp/.",
+        )
+    return index.read_text(encoding="utf-8").replace(
+        "%%MINIAPP_SECRET%%", settings.miniapp_secret
+    )
 
 
 @app.post("/scheduler/tick")

@@ -139,12 +139,19 @@ async def test_me_endpoint(client, db_session) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC5: GET /miniapp returns 200 with SDK script tag
+# AC5: GET /miniapp serves the built Mini App shell
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_miniapp_contains_sdk(client) -> None:
+async def test_miniapp_serves_spa(client, tmp_path, monkeypatch) -> None:
+    # Point at a fake build so the test is hermetic (real dist/ is gitignored).
+    (tmp_path / "index.html").write_text(
+        '<div id="root"></div><script src="/miniapp/assets/index.js"></script>'
+    )
+    monkeypatch.setattr("app.main._WEBAPP_DIST", tmp_path)
+
     response = await client.get("/miniapp")
     assert response.status_code == 200
-    assert "telegram-web-app.js" in response.text
+    assert '<div id="root">' in response.text
+    assert "/miniapp/assets/" in response.text
