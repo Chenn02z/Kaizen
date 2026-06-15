@@ -128,7 +128,8 @@ async def test_me_endpoint(client, db_session) -> None:
         await award_xp(facts, telegram_user_id=settings.allowed_user_id, session=db_session)
     await db_session.commit()
 
-    response = await client.get("/me")
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    response = await client.get("/me", params=params)
     assert response.status_code == 200
     data = response.json()
     # Validate it parses as UserStats

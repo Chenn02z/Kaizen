@@ -12,7 +12,7 @@ if settings.langfuse_public_key:
     os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
     os.environ.setdefault("LANGFUSE_BASE_URL", settings.langfuse_host)
 
-from langfuse import observe  # noqa: E402 — must import after env vars are set
+from langfuse import get_client, observe  # noqa: E402 — must import after env vars are set
 
 _client = anthropic.AsyncAnthropic(api_key=settings.llm_api_key)
 _embed_client = _openai.AsyncOpenAI(api_key=settings.embed_api_key)
@@ -45,7 +45,19 @@ async def complete(
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = {"type": "any"}
-    return await _client.messages.create(**kwargs)
+    response = await _client.messages.create(**kwargs)
+    # The bare @observe span records latency but cannot read token usage out of
+    # an Anthropic Message; feed it in so Langfuse can attribute cost. Guard on
+    # the key so the disabled path stays silent (no active span to update).
+    if settings.langfuse_public_key:
+        get_client().update_current_generation(
+            model=settings.llm_model,
+            usage_details={
+                "input": response.usage.input_tokens,
+                "output": response.usage.output_tokens,
+            },
+        )
+    return response
 
 
 async def embed(texts: list[str]) -> list[list[float]]:

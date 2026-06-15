@@ -10,8 +10,9 @@ longitudinal reasoning.
 
 ## Scope
 
-In: Mem0 integration over the stored logs/facts, a `recall_history` capability,
-and pattern surfacing (e.g. "you relapse on low-sleep days"). Reflection queries
+In: Mem0 integration over the stored logs/facts plus the user's habit plan, a
+`recall_history` capability, and pattern surfacing (e.g. "you relapse on
+low-sleep days" or "you miss gym on weeks with late nights"). Reflection queries
 ("how was this week?", "when do I usually slip?") answered from memory + facts.
 
 Out: proactive sending and the scheduler (m5), evals (m6).
@@ -27,7 +28,8 @@ Milestones 1–3.
 - [ ] Reflection query handling: route "how was my week / when do I slip"
       questions through memory + `extracted_facts`.
 - [ ] Simple pattern detection over recent facts (correlation between a
-      trigger/condition and missed habits).
+      trigger/condition and missed habits), ideally expressed against known
+      habits from the habit plan rather than only raw free text.
 
 ## Acceptance criteria (verify each)
 

@@ -12,9 +12,11 @@ LangGraph, scheduler/event-driven.
 
 In: a LangGraph graph with the three tools (`extract_facts`, `retrieve_techniques`,
 `recall_history`) as nodes; message classification (log vs question vs check-in);
-a scheduler that ticks on a cadence; the decide-or-stay-silent reasoning step;
-a per-day intervention cap; the `interventions` table logging why each nudge was
-sent and whether it was engaged with.
+a scheduler that ticks on a cadence; due-habit evaluation against the user's
+habit plan; one same-day fallback `check-in` for ambiguous or missing evidence;
+the decide-or-stay-silent reasoning step; a per-day intervention cap; the
+`interventions` table logging why each nudge was sent and whether it was engaged
+with.
 
 Out: evals + Langfuse harness (m6) — though leave the `interventions` table ready
 for it.
@@ -29,14 +31,21 @@ Milestones 1–4 (all three tools exist and work standalone).
 - [ ] Convert extraction, RAG retrieval, and memory recall into agent tools.
 - [ ] Scheduler (APScheduler or a cron-hit endpoint) waking the agent N×/day,
       respecting quiet hours.
+- [ ] Due-habit evaluation: determine which habits were expected today from the
+      habit plan and whether the user has already supplied enough evidence.
+- [ ] Fallback check-in node: if a due habit has no relevant evidence by its
+      expected window, send at most one same-day explicit check-in before
+      escalating to a proactive intervention.
 - [ ] Proactive node: pull recent facts + memory, reason about whether to
       intervene, choose technique + phrasing, or decide to stay silent.
 - [ ] Daily cap enforced; `interventions` rows recorded with the reason.
 
 ## Acceptance criteria (verify each)
 
-- On a "drifting" fixture (missed habit several days), a scheduler tick produces a
-  grounded proactive message → test.
+- On a fixture with a due habit but no evidence by the expected window, a
+  scheduler tick produces one fallback `check-in` → test.
+- On a "drifting" fixture (missed habit several days), the agent escalates from
+  missing evidence or repeated misses into a grounded proactive message → test.
 - On a "doing fine" fixture, the same tick decides to stay silent → test. (Both
   outcomes must be reachable — this is the agentic behavior.)
 - The daily cap is never exceeded regardless of tick frequency → test.

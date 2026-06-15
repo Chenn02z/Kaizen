@@ -1,6 +1,26 @@
 # Kaizen
 
-Agentic behavior-change companion — Telegram bot backed by FastAPI and PostgreSQL.
+Kaizen is a personal habit-change companion built as a Telegram bot.
+
+Existing habit apps helped me track intentions, but they still relied on me to
+open the app, interpret my own patterns, and recover after I drifted. That did
+not change my behavior. I built Kaizen to live in Telegram, where logging is
+low-friction and accountability can reach me in the flow of daily life.
+
+The product goal is not generic AI coaching. Kaizen should take natural-language
+logs, turn them into structured behavioral history, retrieve grounded
+behavior-change techniques, remember personal patterns, and send a context-aware
+`nudge` when I am starting to slip.
+
+Tech stack: FastAPI, LangGraph, PostgreSQL + pgvector, Mem0, and a React-based
+Telegram Mini App.
+
+## What Kaizen is for
+
+- Log the day in natural language through Telegram.
+- Build a persistent history of habits, adherence, mood, triggers, and context.
+- Answer reflection questions like "how did this week go?" using real history.
+- Deliver grounded, timely accountability instead of motivational filler.
 
 ## Quick start
 

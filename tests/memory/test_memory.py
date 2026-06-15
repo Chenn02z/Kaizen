@@ -18,10 +18,7 @@ def test_recall_history_returns_bounded_relevant_subset(monkeypatch):
     all_memories = [{"memory": f"entry {i}"} for i in range(10)]
     relevant = all_memories[:3]
 
-    fake_mem = MagicMock()
-    fake_mem.search.return_value = {"results": relevant}
-
-    with patch("app.memory.recall.get_memory", return_value=fake_mem):
+    with patch("app.memory.recall.mem_search", return_value=relevant):
         from app.memory.recall import recall_history
 
         result = recall_history("exercise", USER_ID, limit=5)
@@ -43,12 +40,6 @@ def test_recall_history_returns_bounded_relevant_subset(monkeypatch):
 @pytest.mark.asyncio
 async def test_answer_reflection_uses_planted_pattern(monkeypatch):
     """Reflection answer references the planted 'work stress' pattern."""
-    pattern_memories = [{"memory": "skipped exercise, trigger: work stress"}] * 5
-
-    fake_mem = MagicMock()
-    fake_mem.search.return_value = {"results": pattern_memories[:3]}
-    fake_mem.get_all.return_value = {"results": pattern_memories}
-
     # Fake complete returns an answer referencing work stress
     fake_block = MagicMock()
     fake_block.type = "text"
@@ -57,7 +48,6 @@ async def test_answer_reflection_uses_planted_pattern(monkeypatch):
     fake_response.content = [fake_block]
 
     with (
-        patch("app.memory.recall.get_memory", return_value=fake_mem),
         patch("app.main.recall_history", return_value="skipped exercise, trigger: work stress"),
         patch("app.main.detect_patterns", return_value="skipped exercise, trigger: work stress"),
         patch("app.main.complete", new=AsyncMock(return_value=fake_response)),
@@ -79,10 +69,7 @@ def test_detect_patterns_caps_at_20_entries(monkeypatch):
     """detect_patterns returns at most 20 entries even if Mem0 has 25."""
     entries_25 = [{"memory": f"entry {i}"} for i in range(25)]
 
-    fake_mem = MagicMock()
-    fake_mem.get_all.return_value = {"results": entries_25}
-
-    with patch("app.memory.recall.get_memory", return_value=fake_mem):
+    with patch("app.memory.recall.mem_get_all", return_value=entries_25):
         from app.memory.recall import detect_patterns
 
         result = detect_patterns(USER_ID)

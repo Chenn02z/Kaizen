@@ -218,14 +218,17 @@ async def webhook(
 
         await session.commit()
 
-    # 6. Generate a grounded coaching reply via the agent loop
+    # 6. Generate the reply
     reply_text = message.text or ""
     try:
-        reply_text = await run_user_message(
-            telegram_user_id=message.from_.id,
-            user_text=message.text or "",
-            facts=facts,
-        )
+        if _is_reflection_query(message.text or ""):
+            reply_text = await _answer_reflection(message.text or "", message.from_.id)
+        else:
+            reply_text = await run_user_message(
+                telegram_user_id=message.from_.id,
+                user_text=message.text or "",
+                facts=facts,
+            )
     except Exception:
         logger.exception("reply generation failed")
 

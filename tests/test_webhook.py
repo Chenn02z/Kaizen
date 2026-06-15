@@ -114,3 +114,34 @@ async def test_wrong_secret_returns_403(client: AsyncClient, db_session) -> None
     assert response_wrong.status_code == 403
     assert await _log_count() == 0
     mock_send.assert_not_called()
+
+
+async def test_reflection_query_uses_reflection_path(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+
+    mock_reflection = AsyncMock(return_value="You usually slip after stressful work days.")
+    mock_agent = AsyncMock(return_value="agent reply")
+    monkeypatch.setattr("app.main._answer_reflection", mock_reflection)
+    monkeypatch.setattr("app.main.run_user_message", mock_agent)
+
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="how was my week?"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    mock_reflection.assert_awaited_once_with("how was my week?", ALLOWED_UID)
+    mock_agent.assert_not_awaited()
+    mock_send.assert_called_once_with(
+        chat_id=ALLOWED_UID,
+        text="You usually slip after stressful work days.",
+    )

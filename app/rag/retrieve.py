@@ -1,4 +1,5 @@
 import json
+import logging
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -7,14 +8,18 @@ from app.db.models import CorpusChunk
 from app.db.session import AsyncSessionLocal
 from app.llm.client import complete, embed
 
+logger = logging.getLogger(__name__)
+
 
 class _RerankScore(BaseModel):
     index: int
     score: float
 
 
-async def retrieve(query: str, top_k: int = 5, top_n: int = 3) -> list[CorpusChunk]:
-    """Embed query, cosine search top_k, rerank to top_n."""
+async def retrieve(
+    query: str, top_k: int = 5, top_n: int = 3, rerank: bool = True
+) -> list[CorpusChunk]:
+    """Embed query, cosine search top_k, optionally rerank to top_n."""
     query_vec = (await embed([query]))[0]
 
     async with AsyncSessionLocal() as session:
@@ -28,6 +33,9 @@ async def retrieve(query: str, top_k: int = 5, top_n: int = 3) -> list[CorpusChu
 
     if not candidates:
         return []
+
+    if not rerank:
+        return candidates[:top_n]
 
     return await _rerank(query, candidates, top_n)
 
@@ -50,7 +58,14 @@ async def _rerank(query: str, candidates: list[CorpusChunk], top_n: int) -> list
 
     try:
         text_content = next(b.text for b in response.content if b.type == "text")
-        scores = [_RerankScore.model_validate(item) for item in json.loads(text_content)]
+        # The model may wrap the array in a markdown fence or prose; extract it.
+        start, end = text_content.find("["), text_content.rfind("]")
+        if start == -1 or end <= start:
+            raise ValueError("no JSON array in reranker output")
+        scores = [
+            _RerankScore.model_validate(item)
+            for item in json.loads(text_content[start : end + 1])
+        ]
         indexed = {s.index: s.score for s in scores}
         pos = {id(c): i for i, c in enumerate(candidates)}
         sorted_candidates = sorted(
@@ -60,4 +75,5 @@ async def _rerank(query: str, candidates: list[CorpusChunk], top_n: int) -> list
         )
         return sorted_candidates[:top_n]
     except Exception:
+        logger.warning("reranker output unparseable; falling back to cosine order", exc_info=True)
         return candidates[:top_n]
