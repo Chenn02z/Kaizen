@@ -46,6 +46,42 @@ class ExtractedFacts(Base):
     )
 
 
+class HabitCategory(Base):
+    __tablename__ = "habit_categories"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    __table_args__ = (UniqueConstraint("telegram_user_id", "name"),)
+
+
+class HabitPlan(Base):
+    __tablename__ = "habit_plans"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    category_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("habit_categories.id"), nullable=False
+    )
+    habit_name: Mapped[str] = mapped_column(Text, nullable=False)
+    direction: Mapped[str] = mapped_column(Text, nullable=False)
+    cadence_type: Mapped[str] = mapped_column(Text, nullable=False)
+    cadence_value: Mapped[object | None] = mapped_column(JSON, nullable=True)
+    success_condition: Mapped[str] = mapped_column(Text, nullable=False)
+    habit_aliases: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    known_triggers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fallback_checkin_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    expected_evidence_window: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    __table_args__ = (UniqueConstraint("telegram_user_id", "habit_name"),)
+
+
 class CorpusChunk(Base):
     __tablename__ = "corpus_chunks"
 
@@ -89,7 +125,7 @@ class Intervention(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )
-    kind: Mapped[str] = mapped_column(Text, nullable=False)  # 'proactive' | 'silence'
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # 'proactive' | 'silence' | 'check-in'
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     technique: Mapped[str | None] = mapped_column(Text, nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)

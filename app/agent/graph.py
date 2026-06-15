@@ -71,7 +71,7 @@ async def extract_facts(state: AgentState) -> AgentState:
         return state
     text = state.get("user_text") or ""
     try:
-        facts = await tool_extract(text)
+        facts = await tool_extract(text, state["telegram_user_id"])
     except Exception:
         logger.exception("extract_facts node failed")
         facts = None

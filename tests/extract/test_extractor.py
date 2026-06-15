@@ -8,6 +8,7 @@ from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
+from app.habits.plan import HabitPlanContext
 from app.main import app, get_send_message
 
 EXAMPLES = [
@@ -95,12 +96,39 @@ async def test_malformed_response_invalid_adherence(monkeypatch) -> None:
         await extract("some log text")
 
 
+async def test_extract_uses_habit_plan_context_and_filters_unknown_habits(monkeypatch) -> None:
+    plans = [
+        HabitPlanContext(
+            category_name="SELF",
+            habit_name="read",
+            direction="build",
+            cadence_type="daily",
+            success_condition="Completed a real reading session",
+            habit_aliases=["read before bed"],
+            known_triggers=[],
+        )
+    ]
+    mock_complete = AsyncMock(
+        return_value=_make_tool_response(
+            {"habits": ["exercise", "read"], "adherence": "yes", "mood": "good"}
+        )
+    )
+    monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
+
+    result = await extract("read before bed", plans)
+
+    assert result.habits == ["read"]
+    system_prompt = mock_complete.call_args.kwargs["system"]
+    assert "Use only habit names from the user's habit plan" in system_prompt
+    assert "read before bed" in system_prompt
+
+
 # AC2: each inbound message creates one linked extracted_facts row
 async def test_webhook_creates_extracted_facts_row(client, db_session, monkeypatch) -> None:
     from app.config import settings
 
     mock_complete = AsyncMock(
-        return_value=_make_tool_response({"habits": ["exercise"], "adherence": "yes"})
+        return_value=_make_tool_response({"habits": ["run"], "adherence": "yes"})
     )
     monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
 
@@ -131,5 +159,5 @@ async def test_webhook_creates_extracted_facts_row(client, db_session, monkeypat
         rows = result.scalars().all()
 
     assert len(rows) == 1
-    assert rows[0].habits == ["exercise"]
+    assert rows[0].habits == ["run"]
     assert rows[0].adherence == "yes"

@@ -21,6 +21,7 @@ from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
 from app.gamification.stats import UserStats, get_user_stats
 from app.gamification.xp import XPResult, award_xp
+from app.habits.plan import get_habit_plan_context
 from app.llm.client import complete
 from app.memory.recall import detect_patterns, recall_history
 from app.memory.store import store_facts
@@ -198,7 +199,8 @@ async def webhook(
         await session.flush()
 
         try:
-            facts = await extract(message.text or "")
+            habit_plans = await get_habit_plan_context(session, message.from_.id)
+            facts = await extract(message.text or "", habit_plans)
             ef = ExtractedFactsModel(
                 log_id=log.id,
                 habits=facts.habits,

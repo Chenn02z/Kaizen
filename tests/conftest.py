@@ -15,7 +15,8 @@ async def db_session():
     async with AsyncSessionLocal() as session:
         await session.execute(
             text(
-                "TRUNCATE TABLE logs, extracted_facts, user_progress, habit_progress"
+                "TRUNCATE TABLE logs, extracted_facts, user_progress, habit_progress,"
+                " habit_plans, habit_categories"
                 " RESTART IDENTITY CASCADE"
             )
         )

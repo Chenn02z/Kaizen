@@ -1,5 +1,6 @@
 """Tests for the proactive agent — milestone 6 acceptance criteria."""
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,6 +13,11 @@ from app.db.session import AsyncSessionLocal
 from app.main import app
 
 USER_ID = 12345
+
+
+def _today_at(hour: int) -> datetime:
+    now = datetime.now(timezone.utc)
+    return now.replace(hour=hour, minute=0, second=0, microsecond=0)
 
 
 def _make_decide_response(
@@ -61,7 +67,7 @@ async def test_tick_drifting_sends_proactive(db_session, monkeypatch) -> None:
     )
     monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
 
-    await run_tick(USER_ID)
+    await run_tick(USER_ID, now=_today_at(13))
 
     # intervention row written
     async with AsyncSessionLocal() as session:
@@ -105,7 +111,7 @@ async def test_tick_doing_fine_stays_silent(db_session, monkeypatch) -> None:
     )
     monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
 
-    await run_tick(USER_ID)
+    await run_tick(USER_ID, now=_today_at(13))
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -118,6 +124,56 @@ async def test_tick_doing_fine_stays_silent(db_session, monkeypatch) -> None:
     assert "completed all habits" in rows[0].reason
 
     # send_message must NOT have been called
+    mock_send.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# AC0: due habit with no evidence after the window → one fallback check-in
+# ---------------------------------------------------------------------------
+
+
+async def test_tick_due_habit_sends_one_fallback_checkin(db_session, monkeypatch) -> None:
+    mock_complete = AsyncMock()
+    monkeypatch.setattr("app.agent.graph.complete", mock_complete)
+    monkeypatch.setattr("app.agent.tools._recall_history", lambda q, uid, limit=5: "")
+
+    mock_send = AsyncMock()
+    monkeypatch.setattr("app.agent.runner.send_message", mock_send)
+
+    await run_tick(USER_ID, now=_today_at(21))
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(Intervention.telegram_user_id == USER_ID)
+        )
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].kind == "check-in"
+    assert "missing evidence" in rows[0].reason
+    assert rows[0].message is not None
+    assert "Quick check-in" in rows[0].message
+    mock_send.assert_awaited_once()
+    mock_complete.assert_not_awaited()
+
+    mock_complete.return_value = _make_decide_response(
+        action="silent",
+        reason="already asked for a check-in",
+    )
+    mock_send.reset_mock()
+
+    await run_tick(USER_ID, now=_today_at(21))
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(
+                Intervention.telegram_user_id == USER_ID,
+                Intervention.kind == "check-in",
+            )
+        )
+        checkins = result.scalars().all()
+
+    assert len(checkins) == 1
     mock_send.assert_not_awaited()
 
 

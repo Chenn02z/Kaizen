@@ -2,14 +2,21 @@
 
 import asyncio
 
+from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract as _extract
+from app.habits.plan import get_habit_plan_context
 from app.memory.recall import recall_history as _recall_history
 from app.rag.retrieve import retrieve as _retrieve
 
 
-async def tool_extract(log_text: str):  # type: ignore[return]
+async def tool_extract(log_text: str, telegram_user_id: int | None = None):  # type: ignore[return]
     """Extract structured facts from a log entry."""
-    return await _extract(log_text)
+    if telegram_user_id is None:
+        return await _extract(log_text)
+    async with AsyncSessionLocal() as session:
+        habit_plans = await get_habit_plan_context(session, telegram_user_id)
+        await session.commit()
+    return await _extract(log_text, habit_plans)
 
 
 async def tool_retrieve(query: str, top_k: int = 5, top_n: int = 3):  # type: ignore[return]
