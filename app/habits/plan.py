@@ -260,22 +260,32 @@ def _parse_window(value: str | None) -> time:
 
 
 def _due_reason(plan: HabitPlanContext, today: date, weekly_completed: int) -> str | None:
+    if not habit_due_today(plan, today, weekly_completed):
+        return None
     if plan.cadence_type == "daily":
         return "daily habit has no completion evidence today"
     if plan.cadence_type == "specific_weekdays":
+        return "weekday habit has no completion evidence today"
+    if plan.cadence_type == "times_per_week":
+        target = int(plan.cadence_value or 0)
+        return f"weekly target needs completion today ({weekly_completed}/{target} done)"
+    return None
+
+
+def habit_due_today(plan: HabitPlanContext, today: date, weekly_completed: int) -> bool:
+    if plan.cadence_type == "daily":
+        return True
+    if plan.cadence_type == "specific_weekdays":
         values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
-        if _WEEKDAY_KEYS[today.weekday()] in values:
-            return "weekday habit has no completion evidence today"
-        return None
+        return _WEEKDAY_KEYS[today.weekday()] in values
     if plan.cadence_type == "times_per_week":
         target = int(plan.cadence_value or 0)
         if target <= 0:
-            return None
+            return False
         remaining_needed = max(0, target - weekly_completed)
         days_remaining_after_today = 6 - today.weekday()
-        if remaining_needed > days_remaining_after_today:
-            return f"weekly target needs completion today ({weekly_completed}/{target} done)"
-    return None
+        return remaining_needed > days_remaining_after_today
+    return False
 
 
 async def _completed_habits_between(

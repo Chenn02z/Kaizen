@@ -44,3 +44,7 @@ Canonical terminology for product discussions and milestone planning.
   reviewed.
 - `quiet hours`: times when proactive messages must stay silent.
 - `grounded`: advice tied to a real `technique` and the user's own history.
+- `dashboard`: the Telegram Mini App surface for read-only review of habit
+  state, recent logs, progress, and recorded interventions. In v1, the
+  dashboard does not create or edit habit plans; Telegram chat remains the
+  logging and check-in surface.

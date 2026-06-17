@@ -19,6 +19,10 @@ class UserStats(BaseModel):
     habits: list[HabitStats]
 
 
+def build_empty_user_stats() -> UserStats:
+    return UserStats(level=1, xp=0, xp_to_next_level=100, habits=[])
+
+
 async def get_user_stats(telegram_user_id: int, session: AsyncSession) -> UserStats:
     up = (
         await session.execute(
@@ -27,7 +31,7 @@ async def get_user_stats(telegram_user_id: int, session: AsyncSession) -> UserSt
     ).scalar_one_or_none()
 
     if up is None:
-        return UserStats(level=1, xp=0, xp_to_next_level=100, habits=[])
+        return build_empty_user_stats()
 
     habits_result = await session.execute(
         select(HabitProgress).where(HabitProgress.telegram_user_id == telegram_user_id)
