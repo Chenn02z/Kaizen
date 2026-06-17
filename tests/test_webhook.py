@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
@@ -7,6 +8,7 @@ from app.config import settings
 from app.db.models import Log
 from app.db.session import AsyncSessionLocal
 from app.main import app, get_send_message
+from app.telegram.webapp import dashboard_inline_keyboard
 
 VALID_HEADERS = {"X-Telegram-Bot-Api-Secret-Token": settings.telegram_webhook_secret}
 
@@ -144,4 +146,62 @@ async def test_reflection_query_uses_reflection_path(
     mock_send.assert_called_once_with(
         chat_id=ALLOWED_UID,
         text="You usually slip after stressful work days.",
+    )
+
+
+@pytest.mark.asyncio
+async def test_dashboard_command_launches_webapp_and_skips_log(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "public_url", "https://example.com")
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="/dashboard"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    mock_send.assert_awaited_once_with(
+        chat_id=ALLOWED_UID,
+        text="Open your dashboard:",
+        reply_markup=dashboard_inline_keyboard(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["/start", "/app"])
+async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+    command: str,
+) -> None:
+    monkeypatch.setattr(settings, "public_url", "https://example.com")
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text=command),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    mock_send.assert_awaited_once_with(
+        chat_id=ALLOWED_UID,
+        text="Open your dashboard:",
+        reply_markup=dashboard_inline_keyboard(),
     )

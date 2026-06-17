@@ -8,9 +8,9 @@ not change my behavior. I built Kaizen to live in Telegram, where logging is
 low-friction and accountability can reach me in the flow of daily life.
 
 The product goal is not generic AI coaching. Kaizen should take natural-language
-logs, turn them into structured behavioral history, retrieve grounded
-behavior-change techniques, remember personal patterns, and send a context-aware
-`nudge` when I am starting to slip.
+logs, turn them into structured behavioral history, surface a read-only Telegram
+dashboard, remember personal patterns, and send a context-aware `nudge` when I
+am starting to slip.
 
 Tech stack: FastAPI, LangGraph, PostgreSQL + pgvector, Mem0, and a React-based
 Telegram Mini App.
@@ -32,6 +32,17 @@ uv run alembic upgrade head   # create all tables (logs, extracted_facts, corpus
 uv run python -m app.rag.load # embed the behavioral-science corpus into pgvector (see below)
 uv run uvicorn app.main:app --reload
 ```
+
+## Telegram dashboard
+
+The Mini App is the main review surface. To make it open correctly inside
+Telegram:
+
+1. Set `PUBLIC_URL` in `.env` to your HTTPS deployment URL.
+2. In BotFather, register that HTTPS origin as the bot's Mini App domain.
+3. Restart the FastAPI app so `setChatMenuButton` runs on startup.
+4. Use `/start`, `/dashboard`, or the bot menu button to open the read-only
+   dashboard in Telegram.
 
 ## Load the corpus (RAG)
 
@@ -57,7 +68,7 @@ cd webapp && npm install && npm run build   # outputs webapp/dist/, served at /m
 ```
 
 For live frontend dev with hot reload, run `npm run dev` in `webapp/` (it proxies
-`/me` to the API on `localhost:8000`). The API serves `/miniapp` only when a
+`/dashboard` to the API on `localhost:8000`). The API serves `/miniapp` only when a
 build exists; without one it returns HTTP 503.
 
 ## Register the Telegram webhook (local dev)

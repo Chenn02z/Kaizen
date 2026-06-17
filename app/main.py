@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.agent.runner import run_user_message
 from app.agent.scheduler import start_scheduler, stop_scheduler
 from app.config import settings
+from app.dashboard import DashboardData, get_dashboard_data
 from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.models import Log
 from app.db.session import AsyncSessionLocal
@@ -26,6 +27,7 @@ from app.llm.client import complete
 from app.memory.recall import detect_patterns, recall_history
 from app.memory.store import store_facts
 from app.telegram.client import send_message
+from app.telegram.webapp import dashboard_inline_keyboard, dashboard_menu_button
 
 logger = logging.getLogger(__name__)
 
@@ -43,19 +45,14 @@ _WEBAPP_DIST = Path(__file__).resolve().parent.parent / "webapp" / "dist"
 
 async def _register_menu_button() -> None:
     """Register the Mini App menu button with Telegram on startup."""
-    if not settings.public_url:
+    menu_button = dashboard_menu_button()
+    if menu_button is None:
         return
     url = f"https://api.telegram.org/bot{settings.telegram_token}/setChatMenuButton"
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             url,
-            json={
-                "menu_button": {
-                    "type": "web_app",
-                    "text": "My Stats",
-                    "web_app": {"url": f"{settings.public_url}/miniapp"},
-                }
-            },
+            json={"menu_button": menu_button},
         )
         if not resp.is_success:
             logger.warning("setChatMenuButton failed: %s %s", resp.status_code, resp.text)
@@ -141,6 +138,14 @@ async def me(request: Request) -> UserStats:
         return await get_user_stats(settings.allowed_user_id, session)
 
 
+@app.get("/dashboard", response_model=DashboardData)
+async def dashboard(request: Request) -> DashboardData:
+    if settings.miniapp_secret and request.query_params.get("secret") != settings.miniapp_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    async with AsyncSessionLocal() as session:
+        return await get_dashboard_data(settings.allowed_user_id, session)
+
+
 @app.get("/miniapp", response_class=HTMLResponse)
 async def miniapp() -> str:
     index = _WEBAPP_DIST / "index.html"
@@ -188,6 +193,15 @@ async def webhook(
 
     # 4. Single-user guard: silently drop messages from anyone else
     if message.from_.id != settings.allowed_user_id:
+        return {}
+
+    if _is_dashboard_command(message.text):
+        reply_markup = dashboard_inline_keyboard()
+        if reply_markup is None:
+            reply_text = "Kaizen dashboard is not configured yet. Set PUBLIC_URL to your HTTPS deployment."
+            await _send(chat_id=message.chat.id, text=reply_text)
+        else:
+            await _send(chat_id=message.chat.id, text="Open your dashboard:", reply_markup=reply_markup)
         return {}
 
     # 5. Persist the log entry and extraction result; award XP
@@ -258,6 +272,14 @@ _REFLECTION_PATTERNS = [
 def _is_reflection_query(text: str) -> bool:
     lower = text.lower()
     return any(p.lower() in lower for p in _REFLECTION_PATTERNS)
+
+
+def _is_dashboard_command(text: Optional[str]) -> bool:
+    if not text:
+        return False
+    first = text.strip().split(maxsplit=1)[0]
+    command = first.split("@", maxsplit=1)[0].casefold()
+    return command in {"/start", "/dashboard", "/app"}
 
 
 async def _answer_reflection(query: str, telegram_user_id: int) -> str:

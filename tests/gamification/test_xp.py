@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest  # noqa: F401 — used by pytest.mark.asyncio
 
+from app.dashboard import DashboardData
 from app.db.models import UserProgress
 from app.extract.schema import Adherence, ExtractedFacts
-from app.gamification.stats import UserStats
 from app.gamification.xp import award_xp, level_for_xp
 
 # ---------------------------------------------------------------------------
@@ -114,13 +114,13 @@ async def test_streak_bonus(db_session) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC4: GET /me returns valid UserStats
+# AC4: GET /dashboard returns valid UserStats progress payload
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_me_endpoint(client, db_session) -> None:
-    """GET /me returns valid UserStats JSON after awarding XP."""
+async def test_dashboard_progress_endpoint(client, db_session) -> None:
+    """GET /dashboard returns valid progress JSON after awarding XP."""
     from app.config import settings
 
     facts = ExtractedFacts(habits=["yoga"], adherence=Adherence.yes)
@@ -129,14 +129,14 @@ async def test_me_endpoint(client, db_session) -> None:
     await db_session.commit()
 
     params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    response = await client.get("/me", params=params)
+    response = await client.get("/dashboard", params=params)
     assert response.status_code == 200
     data = response.json()
-    # Validate it parses as UserStats
-    stats = UserStats.model_validate(data)
-    assert stats.xp == 50
-    assert len(stats.habits) == 1
-    assert stats.habits[0].name == "yoga"
+    dashboard = DashboardData.model_validate(data)
+    assert dashboard.progress.xp == 50
+    assert dashboard.progress.level == 1
+    assert len(dashboard.progress.habits) == 1
+    assert dashboard.progress.habits[0].name == "yoga"
 
 
 # ---------------------------------------------------------------------------
