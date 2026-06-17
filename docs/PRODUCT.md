@@ -1,6 +1,6 @@
 # Kaizen — Product Requirements (PM view)
 
-Owner: you (solo) · Status: in progress · Last updated: 2026-06-15
+Owner: you (solo) · Status: in progress · Last updated: 2026-06-17
 
 This document is the *why* and *what*. The *how* lives in `milestones/` and
 `../CLAUDE.md`. When a build decision is ambiguous, this file is the tiebreaker.
@@ -56,7 +56,7 @@ work?** If yes, the AI is decorative — redesign it.
 ## 5. Non-goals (v1)
 
 - Multi-user, accounts, social features.
-- A rich graphical dashboard (Telegram-only; charts are a later Mini App).
+- Habit-plan editing inside the dashboard; v1 dashboard is read-only review.
 - Mobile/native app, App Store presence.
 - Medical or clinical claims. This is a self-improvement tool, not therapy.
 - Wearable/health-data integrations (later, via MCP).
@@ -67,6 +67,9 @@ work?** If yes, the AI is decorative — redesign it.
   2am") and it's captured and understood without forms.
 - As the user, I do not need to remember to open a separate habit app just to
   keep the system useful.
+- As the user, I can open a Telegram-native dashboard to review today's habit
+  state, recent logs, progress, and recorded interventions without leaving
+  Telegram.
 - As the user, I should not need explicit checklists most days; my natural-language
   logs should be enough unless the day is ambiguous.
 - As the user, I ask "how did this week go?" or "when do I usually slip?" and get
@@ -109,6 +112,9 @@ work?** If yes, the AI is decorative — redesign it.
 - FR6 Pattern detection (e.g. trigger/relapse correlations).
 - FR7 Proactive interventions: scheduled + agent-decided, with a daily cap.
 - FR8 Reflection queries + an automatic weekly review.
+- FR9 Telegram Mini App dashboard: a read-only review surface for today's habit
+  state, recent logs, progress, and recorded interventions. Habit creation and
+  editing stay out of v1.
 
 ## 8. Success metrics
 
@@ -129,21 +135,25 @@ work?** If yes, the AI is decorative — redesign it.
 
 ## 9. Scope & roadmap
 
-The current repo milestone files are `01` through `07` under `docs/milestones/`.
-The core accountability path is milestones 1, 2, 3, 5, 6, and 7, with
-gamification as an additional retention layer:
+The current repo milestone files are `01` through `08` under `docs/milestones/`.
+The core accountability path is milestones 1, 2, 3, 5, 6, and 7, with the
+Telegram Mini App dashboard promoted from a stats-only retention layer to the
+main read-only review surface:
 
 1. Skeleton — Telegram ⇄ FastAPI ⇄ Postgres.
 2. Extraction — logs → typed facts.
 3. RAG — grounded coaching.
-4. Gamification — XP, progression, and Mini App stats.
+4. Gamification + dashboard — XP, progression, and read-only review in the
+   Telegram Mini App.
 5. Memory — longitudinal reasoning.
 6. Proactive agent — agent-decided interventions.
 7. Evals + observability — proof it works.
+8. Read-only Telegram dashboard — review habit state, logs, progress, and
+   interventions inside the Mini App.
 
-Post-v1 (explicitly later, becomes "future work" + v2 keywords): Telegram Mini
-App dashboard, MCP calendar/health integration, voice logging, multi-agent
-analysis, multi-user.
+Post-v1 (explicitly later, becomes "future work" + v2 keywords): habit editing
+inside the dashboard, richer charts, MCP calendar/health integration, voice
+logging, multi-agent analysis, multi-user.
 
 ## 10. Risks & mitigations
 
