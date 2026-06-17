@@ -1,12 +1,13 @@
 """Runner functions: entry points for user messages and scheduled ticks."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 
 from sqlalchemy import func, select, text
 
 from app.agent.graph import get_graph
+from app.config import get_app_timezone
 from app.db.models import Intervention
 from app.db.session import AsyncSessionLocal
 from app.habits.plan import (
@@ -19,6 +20,17 @@ from app.telegram.client import send_message
 logger = logging.getLogger(__name__)
 
 _DAILY_CAP = 1
+
+
+def _app_day_bounds(now: datetime | None) -> tuple[date, datetime, datetime]:
+    tz = get_app_timezone()
+    reference = now.astimezone(tz) if now and now.tzinfo else now
+    if reference is None:
+        reference = datetime.now(tz)
+    local_date = reference.date()
+    day_start = datetime.combine(local_date, time.min, tzinfo=tz)
+    day_end = day_start + timedelta(days=1)
+    return local_date, day_start, day_end
 
 
 async def run_user_message(
@@ -70,14 +82,15 @@ async def run_tick(telegram_user_id: int, now: datetime | None = None) -> None:
                 {"uid": telegram_user_id},
             )
 
-            today = now.date() if now else date.today()
+            today, day_start, day_end = _app_day_bounds(now)
             count_result = await session.execute(
                 select(func.count())
                 .select_from(Intervention)
                 .where(
                     Intervention.telegram_user_id == telegram_user_id,
                     Intervention.kind == "proactive",
-                    func.date(Intervention.created_at) == today,
+                    Intervention.created_at >= day_start,
+                    Intervention.created_at < day_end,
                 )
             )
             proactive_today = count_result.scalar_one()

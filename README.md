@@ -44,6 +44,9 @@ Telegram:
 4. Use `/start`, `/dashboard`, or the bot menu button to open the read-only
    dashboard in Telegram.
 
+For a hosted deployment, use the Render blueprint and checklist in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Load the corpus (RAG)
 
 The grounded-coaching corpus lives in `corpus/*.md`. After migrations, embed it
