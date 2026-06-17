@@ -81,7 +81,10 @@ toolchain.
 Repo-scoped skills live under `.agents/skills/`. Use them when the task matches
 their scope:
 
-- `$kaizen-milestone` for milestone implementation planning and verification.
+- `$kaizen-milestone` for writing milestone specs and enforcing a consistent
+  template before implementation.
+- `$kaizen-loop` for milestone-driven execution that routes work to the
+  necessary repo skills and checks the result.
 - `$kaizen-backend` for FastAPI, Telegram, DB, migrations, config, and LLM
   gateway work.
 - `$kaizen-rag` for corpus, embeddings, pgvector retrieval, reranking, and

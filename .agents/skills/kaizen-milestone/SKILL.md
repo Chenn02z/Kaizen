@@ -1,40 +1,42 @@
 ---
 name: kaizen-milestone
-description: "Implement or verify a Kaizen milestone from docs/milestones. Use when the user asks to work through a milestone, satisfy acceptance criteria, or decide what remains for a milestone."
+description: "Write or refine a Kaizen milestone spec with a consistent template and checkable acceptance criteria. Use when the user wants to create a milestone, rewrite one for clarity, or verify that a milestone document is complete and well-structured."
 ---
 
 # Kaizen Milestone
 
-Use this skill to drive milestone work from specification to verification.
+Use this skill to write milestone documents, tighten their structure, and make
+their finish line checkable before implementation starts.
 
 ## Workflow
 
 1. Read `AGENTS.md`, `docs/PRODUCT.md`, and the relevant file under
    `docs/milestones/`.
-2. Identify the acceptance criteria and map each one to an existing or needed
-   test.
-3. Inspect the current implementation before editing. Prefer existing patterns
-   over new abstractions.
-4. Make the smallest implementation that satisfies the criteria.
-5. Run focused tests first, then broader checks when risk justifies it.
-6. Report which acceptance criteria are met, which checks ran, and any remaining
-   gaps.
+2. Write or rewrite the milestone so it has a clear:
+   - objective
+   - scope and constraints
+   - acceptance criteria
+   - test or verification expectations
+3. Ensure every acceptance criterion is concrete enough to evaluate after
+   implementation.
+4. Normalize terminology to match the repo's product language.
+5. Flag missing dependencies, sequencing assumptions, or vague requirements
+   directly in the milestone doc.
+6. Report what was clarified, what is still ambiguous, and whether the
+   milestone is ready for implementation.
 
-## Milestone Routing
+## Template Expectations
 
-- Skeleton/webhook/config/database work: use `$kaizen-backend`.
-- Extraction through the LLM gateway: use `$kaizen-backend`.
-- RAG, corpus, embeddings, retrieval, and reranking: use `$kaizen-rag`.
-- Gamification and stats: start from existing app/test structure; use
-  `$kaizen-backend` if API or database work is involved.
-- Memory, LangGraph, scheduler, and proactive nudges: use `$kaizen-agent`.
-- Evals, reports, judge rubrics, and tracing: use `$kaizen-evals`.
-- Telegram Mini App UI: use `$kaizen-frontend`.
+Make sure the milestone includes:
+
+- a short statement of user-visible goal
+- explicit non-goals where the boundary matters
+- acceptance criteria that can be tested or inspected
+- notes about migrations, config, evals, or frontend checks when relevant
 
 ## Guardrails
 
-- Do not mark a milestone done without tests for its acceptance criteria.
-- Do not bypass `app/llm/client.py` for model or embedding calls.
-- Do not fake measured metrics. If a metric is not measured, say so.
-- Do not add services or third-party calls beyond the project rules without
-  flagging the privacy impact.
+- Do not implement code from this skill; this skill prepares the milestone.
+- Do not leave acceptance criteria at the level of "works" or "improve UX."
+- Do not hide unresolved questions inside prose; call them out explicitly.
+- Do not invent product behavior that conflicts with `docs/PRODUCT.md`.
