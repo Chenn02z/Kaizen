@@ -1,9 +1,13 @@
 # Motivation Wave
 
-The motivation wave describes the natural ebb and flow of motivation over time. Motivation is not a stable resource you either have or lack — it rises and falls in waves, influenced by sleep, stress, recent wins, social context, and how long you have been running on willpower depletion.
+source: Atomic Habits and Tiny Habits
 
-Understanding this pattern helps you work with it rather than against it. During high-motivation periods, use the energy to build systems and establish cues — lay the infrastructure of the habit. During low-motivation periods, those systems carry you by minimizing the decisions required to show up.
+technique: motivation wave, ability design, minimum viable habit
 
-When you are riding a motivation wave — feeling energized and committed — resist the urge to overload your schedule with ambitious new habits. Instead, use the wave to reinforce one or two core behaviors and to remove future obstacles: prepare your environment, schedule your sessions, and set up accountability. The wave will pass, and what you built during it will sustain you through the troughs.
+lesson: Motivation is useful but too unstable to be the foundation. Atomic Habits points toward systems that keep working after enthusiasm fades. Tiny Habits explains why: when motivation is low, the behavior must be easier or better prompted. High-motivation moments are best spent designing the environment, choosing anchors, and shrinking the default action for future low-energy days.
 
-When motivation is low, lower your standard rather than abandoning the habit. The two-minute rule and a pre-made schedule are what make showing up possible when you feel nothing. Remind yourself that the habit does not require motivation to survive — it requires only showing up at the minimum threshold. Over time, consistently making it through low-motivation periods builds a different kind of resilience: the confidence that you do not need to feel motivated to act.
+use_when: Use this when the user says they had no motivation, felt energized for a few days then stopped, overcommitted after a good day, or needs a low-motivation version of a habit.
+
+avoid_when: Avoid telling the user to ignore motivation if they are exhausted, sick, or sleep deprived. In those cases, recovery may be the better intervention.
+
+example_application: If the user missed gym from low motivation, use the next motivated moment to pack the gym bag and set the minimum fallback as changing clothes and walking outside for two minutes.

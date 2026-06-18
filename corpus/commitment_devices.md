@@ -1,9 +1,13 @@
 # Commitment Devices
 
-A commitment device is a deliberate choice you make in the present that restricts your future options or raises the stakes of breaking a promise to yourself. By constraining your future self before willpower is tested, you remove the decision that might lead you astray.
+source: Atomic Habits and Tiny Habits
 
-The psychology is rooted in hyperbolic discounting — the tendency to overvalue immediate rewards relative to future ones. You know your future self will be tempted; the commitment device neutralizes that temptation in advance by changing the cost structure.
+technique: commitment devices, accountability, prompt design
 
-Common examples: signing up and paying in advance for a gym class that charges a no-show fee, telling a friend or on a public forum that you will do something and setting a social consequence for failure, or using an app that donates money to a cause you dislike if you miss your target. The key is that the cost of breaking the commitment must feel real enough in the moment of temptation.
+lesson: A commitment device works best when it changes tomorrow's choice before tomorrow's mood arrives. From Atomic Habits, the useful distillation is to design the surrounding system so the desired behavior is easier to execute than avoid. From Tiny Habits, the useful constraint is that the behavior still needs to be small enough to do when motivation is ordinary. The commitment should create a clear prompt and a real but humane consequence, not a shame trap.
 
-When you set up a commitment device, be specific about what counts as compliance and what counts as failure. Vague commitments are easy to rationalize around. "I will go to the gym four times this week" is better than "I will exercise more." A clear standard makes the commitment credible — to yourself and to anyone holding you accountable. Use commitment devices selectively, for habits where you have consistently failed with softer approaches.
+use_when: Use this when the user repeatedly delays a habit, keeps renegotiating a promise, benefits from social accountability, or needs a deadline, payment, calendar booking, or visible promise to make action feel concrete.
+
+avoid_when: Avoid this when the user is already overloaded, ashamed, or failing because the behavior is too large. In that case, shrink the behavior first and use a lighter prompt before adding stakes.
+
+example_application: If the user keeps skipping weekend runs, they can book a Saturday morning run with a friend and define the tiny backup as putting on shoes and walking for five minutes if energy is low.

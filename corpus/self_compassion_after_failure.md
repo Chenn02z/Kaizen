@@ -1,9 +1,13 @@
 # Self-Compassion After Failure
 
-Self-compassion after failure is the practice of responding to your own lapses with the same understanding and kindness you would offer a close friend rather than harsh self-criticism. Research shows this approach, counterintuitively, leads to more consistent behavior change than shame or self-blame.
+source: Atomic Habits and Tiny Habits
 
-The mechanism is that self-criticism activates the threat system — raising cortisol, narrowing thinking, and increasing the likelihood of avoidance. Self-compassion, by contrast, activates the care system, which supports motivation to repair and try again. People who practice self-compassion after lapses are faster to re-engage with their goals.
+technique: self-compassion after failure, recovery framing, tiny restart
 
-When you miss a meditation session, eat off-plan, or break a streak, notice what you say to yourself in the next few minutes. If the inner voice is harsh — "I always do this, I have no discipline" — that voice is not helping you improve. It is simply adding suffering to an already difficult moment. Instead, try the self-compassion reframe: acknowledge what happened honestly ("I missed today"), remind yourself that struggle is universal ("everyone finds this hard sometimes"), and then ask a forward-facing question ("what would help me get back on track tomorrow?").
+lesson: Shame makes the next action heavier. Atomic Habits is useful for reframing a miss as one data point rather than identity collapse. Tiny Habits is useful for moving from emotion to action: choose a tiny restart that lets the user feel successful again quickly. Self-compassion is not lowering the standard; it is removing the emotional tax that blocks the next repetition.
 
-This is not about making excuses or lowering your standards. It is about using a more effective emotional tool for recovery. High self-compassion and high standards are compatible; self-compassion just removes the paralysis that shame creates.
+use_when: Use this when the user says they feel terrible, failed again, ruined the week, or is interpreting a lapse as proof they lack discipline.
+
+avoid_when: Avoid sounding like the miss does not matter. Acknowledge the user's standard, then pivot toward the smallest repair action.
+
+example_application: If the user ate cake at an office party and feels bad, name it as a social-context lapse, then choose the next tiny aligned action: drink water and log dinner without trying to compensate harshly.

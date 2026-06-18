@@ -1,9 +1,13 @@
 # Environment Design
 
-Environment design is the practice of rearranging your physical or digital surroundings so that good behaviors are the path of least resistance and bad behaviors require extra effort. You are engineering your context to work with your intentions rather than against them.
+source: Atomic Habits and Tiny Habits
 
-The principle comes from behavioral economics and behavioral ecology: behavior is heavily shaped by the cues and friction in the immediate environment. You do not need more willpower if your environment makes the right choice automatic.
+technique: environment design, cue design, prompt design
 
-When you want to exercise in the morning, lay out your workout clothes the night before, right next to your bed. The cue is visible, the friction is near-zero, and the decision is already made. Contrast that with having to search for your gym bag in the morning — that small friction is often enough to derail the habit. For meditation, clear a specific spot in your home that is dedicated to the practice, with nothing else there to distract you.
+lesson: Behavior follows what the environment repeatedly asks for. Atomic Habits frames cues as the first step in making a habit obvious; Tiny Habits treats prompts as essential because no behavior happens reliably without a trigger. A good environment does not merely look tidy. It puts the right cue in the path where the user already moves and removes cues that invite the competing behavior.
 
-The same principle works for breaking bad habits by adding friction. If you want to reduce phone use in the evening, charge the phone in another room. If you are trying to eat better, move unhealthy snacks to a high shelf and put fruit on the counter. You are not relying on willpower to resist — you are simply changing the environment so the default choice becomes the healthy one. When you audit your habits that are failing, ask what the environment is making easy versus hard.
+use_when: Use this when the user's log mentions forgetting, being distracted, phone use, snacks, gym gear, morning routines, bedtime routines, or a habit that succeeds only when the setup is already visible.
+
+avoid_when: Avoid treating environment design as the whole solution when the user lacks ability, time, or emotional capacity. A visible cue still fails if the behavior is too hard.
+
+example_application: If the user wants to meditate after coffee, put the cushion and headphones beside the coffee machine so pouring coffee becomes the prompt for sitting down.

@@ -1,179 +1,112 @@
-# Kaizen — Product Requirements (PM view)
+# Kaizen Product Requirements
 
-Owner: you (solo) · Status: in progress · Last updated: 2026-06-17
+Owner: solo builder | Status: in progress | Last updated: 2026-06-18
 
-This document is the *why* and *what*. The *how* lives in `milestones/` and
-`../CLAUDE.md`. When a build decision is ambiguous, this file is the tiebreaker.
+This is the product contract for Kaizen. Milestone execution lives in
+`docs/milestones/`; canonical terminology lives in `docs/CONTEXT.md`.
 
----
+## Product Summary
 
-## 1. Problem
+Kaizen is a Telegram-native behavior-change companion for one user. The user
+logs daily life in natural language; Kaizen extracts structured habit evidence,
+remembers patterns, retrieves grounded behavioral-science techniques from the
+builder's own lesson notes, and intervenes only when a timely nudge is likely to
+help.
 
-I tried existing habit products and they helped me record intentions, but they
-did not reliably change my behavior. They still depended on me to open the app,
-interpret my own patterns, and recover after I drifted.
+The product solves a specific failure mode in habit apps: passive tracking still
+requires the user to open an app, interpret patterns, and recover alone after
+drift. Kaizen should feel like a quiet coach inside the chat the user already
+opens every day.
 
-Changing habits fails for boring, well-understood reasons: people do not notice
-their own patterns, they get generic advice that does not fit their situation,
-and nothing reaches them *at the moment that matters*. Existing habit trackers
-are often passive logbooks. Coaching apps may feel supportive, but they often
-stay generic. Neither gives me personal, timely accountability in the place I
-already show up every day.
+## Target User
 
-## 2. Vision
+The primary user is the builder using Kaizen for real habit change. The
+secondary audience is a hiring engineer evaluating the repo as an AI engineering
+case study. The product must be useful in daily life and technically credible:
+structured extraction, RAG, memory, agentic decisions, evals, and observability
+must all be load-bearing.
 
-Kaizen is the system I wanted instead: a Telegram-native companion that behaves
-like an attentive coach. I can text it the way I already talk to a friend. It
-knows my history, notices when I am drifting, and reaches out with the right
-specific thing at the right time — grounded in behavioral science, not
-motivational filler.
+## User Experience Requirements
 
-## 3. Users & context
+- The user can send a freeform Telegram `log` such as "rough day, skipped gym,
+  doomscrolled until 2am" without filling out forms.
+- Kaizen stores each `log`, extracts typed facts, and maps clear evidence to
+  known `habit`s from the user's habit plan.
+- Habits have cadence, success condition, aliases, known triggers, goals, and
+  expected evidence windows.
+- A single `log` may satisfy multiple habits when the evidence is clear. When a
+  match is ambiguous, Kaizen must prefer leaving the habit unmatched over
+  falsely granting credit.
+- Kaizen can answer `reflection question`s such as "how did this week go?" or
+  "when do I usually slip?" using the user's actual history.
+- When a `reflection question` asks what to change or try next, Kaizen should
+  combine the user's history with retrieved `lesson`s from the corpus.
+- Advice must be `grounded`: tied to a named behavioral-science `technique`, a
+  relevant self-authored `lesson` when useful, and the user's own recent context,
+  not generic encouragement.
+- Kaizen may send a fallback `check-in` when a due habit has no evidence by its
+  expected window.
+- Kaizen may send a proactive `nudge` only when the agent sees a useful moment
+  to intervene. It must respect `quiet hours`, enforce a daily cap, and stay
+  silent when appropriate. Proactive ticks may use retrieved `lesson`s to choose
+  the intervention strategy, but they must not become generic lesson broadcasts.
+- The Telegram Mini App is the read-only dashboard for today's habit state,
+  recent logs, progress, and recorded `intervention`s.
+- XP and levels are motivational feedback, but they are secondary to the core
+  accountability loop: log, understand, reflect, intervene.
 
-- **Primary user:** the builder (single user, v1). Real daily usage is a hard
-  requirement, not a nice-to-have — it's the only source of honest metrics.
-- **Why Telegram:** the product should live in a channel I already use daily, so
-  logging and nudges happen with minimal friction instead of requiring me to
-  remember to open a separate app.
-- **Secondary audience:** a hiring engineer reading the repo. The product must
-  demonstrate production-grade AI engineering (RAG, memory, agentic decisions,
-  evals, observability), not a thin LLM wrapper.
+## Technical Requirements
 
-The litmus test for every feature: **if you removed the LLM, would it still
-work?** If yes, the AI is decorative — redesign it.
+- Backend: Python 3.12, FastAPI, async SQLAlchemy, Alembic, PostgreSQL, and
+  pgvector.
+- Telegram webhook: verify the webhook secret, allow only `ALLOWED_USER_ID`,
+  persist logs, handle `/start`, `/dashboard`, and `/app` without storing those
+  commands as logs.
+- LLM gateway: all completion and embedding calls go through `app/llm/client.py`;
+  no other module imports vendor SDKs directly.
+- Structured extraction: model output for extraction or decisions is validated
+  with Pydantic v2. Do not parse model free text with regex.
+- Habit state: cadence support is limited to daily, specific weekdays, and N
+  times per week for v1.
+- RAG: retrieve and rerank curated corpus chunks from pgvector. Corpus entries
+  are self-authored `lesson`s distilled from books, articles, or experience,
+  mapped to behavioral-science `technique`s; generated coaching must name the
+  technique it uses and avoid copying source text.
+- Memory: write extracted facts to memory and recall compact history for
+  reflection and agent decisions without dumping all logs into context.
+  Action-oriented reflection answers may retrieve `lesson`s after recalling the
+  user's relevant history.
+- Agent loop: LangGraph routes user messages through extraction, retrieval,
+  memory, and response generation; scheduled ticks handle due-habit checks,
+  fallback check-ins, proactive decisions, or silence.
+- Scheduler: run app-local ticks outside quiet hours, record all check-ins,
+  nudges, and silence decisions in `interventions`.
+- Dashboard: backend read models, not React-only inference, derive habit status
+  from persisted logs, extracted facts, habit plans, progress, and
+  interventions.
+- Observability: Langfuse traces model calls with latency, token usage, and
+  cost; evals provide reproducible quality signals.
 
-## 4. Goals
+## Success Metrics
 
-- G1 — Make logging effortless: capture a day's behavior in one natural-language
-  Telegram message.
-- G2 — Turn unstructured logs into a queryable behavioral history.
-- G3 — Give advice that is *specific* (grounded in a named technique) and
-  *personal* (informed by the user's own history).
-- G4 — Provide context-aware accountability: intervene proactively and
-  judiciously when I am drifting, and stay silent otherwise.
-- G5 — Prove the AI is actually good via measurable evals, not vibes.
+- Product: 60+ continuous days of real use, logging consistency, and improving
+  self-reported adherence over time.
+- Extraction: field accuracy against a hand-labeled log set, including
+  multi-habit and ambiguous-log cases.
+- Grounding: judge-scored rate of replies and reflection answers that cite and
+  correctly apply a real technique and relevant lesson.
+- Proactivity: share of nudges that receive useful engagement, with spam
+  prevented by quiet hours and the daily cap.
+- System: p95 reply latency, token cost per interaction, passing tests, and
+  clean traces.
 
-## 5. Non-goals (v1)
+## Scope Boundaries
 
-- Multi-user, accounts, social features.
-- Habit-plan editing inside the dashboard; v1 dashboard is read-only review.
-- Mobile/native app, App Store presence.
-- Medical or clinical claims. This is a self-improvement tool, not therapy.
-- Wearable/health-data integrations (later, via MCP).
+V1 is single-user, Telegram-first, and read-only for dashboard habit review. It
+does not include multi-user accounts, social features, clinical claims, native
+mobile apps, wearable integrations, or habit editing inside the Mini App.
 
-## 6. Core user stories
-
-- As the user, I text a freeform log ("rough day, skipped gym, doomscrolled till
-  2am") and it's captured and understood without forms.
-- As the user, I do not need to remember to open a separate habit app just to
-  keep the system useful.
-- As the user, I can open a Telegram-native dashboard to review today's habit
-  state, recent logs, progress, and recorded interventions without leaving
-  Telegram.
-- As the user, I should not need explicit checklists most days; my natural-language
-  logs should be enough unless the day is ambiguous.
-- As the user, I ask "how did this week go?" or "when do I usually slip?" and get
-  an answer grounded in my actual logs.
-- As the user, I receive an unprompted, well-timed nudge on a known weak point —
-  but I'm never spammed.
-- As the user, the advice references a real technique (e.g. implementation
-  intentions) rather than generic encouragement.
-- As the maintainer, I can see whether a change made interventions better or
-  worse via an eval score and Langfuse traces.
-
-## 7. Functional requirements
-
-- FR1 Onboarding: define categories and habits to build/break, with each habit
-  stored as an explicit habit plan containing cadence, success condition, known
-  triggers, goals, and optional aliases/examples for natural-language matching.
-- FR1a Habit success conditions should be concrete enough to judge from a `log`,
-  but broad enough to capture real progress. Example: "made meaningful progress
-  on a personal project" is better than requiring only "shipped a feature".
-- FR1b Each habit must have explicit cadence, such as daily, specific weekdays,
-  or N times per week, so Kaizen can determine when the habit was due.
-- FR1c V1 cadence support is intentionally limited to three patterns: daily,
-  specific weekdays, and N times per week.
-- FR2 Natural-language logging via Telegram (text, v1).
-- FR2a Adherence inference: infer habit completion from natural-language logs by
-  default; request an explicit check-in only when the day is ambiguous or
-  missing.
-- FR2b Fallback check-in: if a due habit has no relevant log by its expected
-  window, Kaizen may send one same-day fallback check-in instead of waiting
-  until the next morning.
-- FR3 Structured extraction: each log → typed facts (habit, adherence, mood,
-  trigger, context).
-- FR3a A single log may satisfy multiple habits when it contains clear evidence
-  for each one.
-- FR3b When matching is ambiguous, Kaizen should prefer precision over recall:
-  leave the habit unmatched and rely on a later fallback check-in rather than
-  incorrectly marking the habit complete.
-- FR4 Persistent memory: longitudinal profile the agent reasons over.
-- FR5 Grounded coaching via RAG over a curated behavioral-science corpus.
-- FR6 Pattern detection (e.g. trigger/relapse correlations).
-- FR7 Proactive interventions: scheduled + agent-decided, with a daily cap.
-- FR8 Reflection queries + an automatic weekly review.
-- FR9 Telegram Mini App dashboard: a read-only review surface for today's habit
-  state, recent logs, progress, and recorded interventions. Habit creation and
-  editing stay out of v1.
-
-## 8. Success metrics
-
-**Product (does it help me?)**
-- Days of real usage (target: 60+ continuous).
-- Logging consistency (% of days logged).
-- Self-reported adherence trend over the usage window.
-
-**Technical (is the AI good?)**
-- Grounded-response rate (LLM-as-judge): advice tied to a real technique.
-- Extraction field accuracy vs a hand-labeled set.
-- Proactive precision: % of nudges the user engages with (not ignored).
-- p95 reply latency and token cost per interaction (Langfuse).
-
-**Meta (does it earn the resume bullet?)**
-- Each milestone ships a measurable delta backed by the eval harness and a public
-  repo with tests.
-
-## 9. Scope & roadmap
-
-The current repo milestone files are `01` through `08` under `docs/milestones/`.
-The core accountability path is milestones 1, 2, 3, 5, 6, and 7, with the
-Telegram Mini App dashboard promoted from a stats-only retention layer to the
-main read-only review surface:
-
-1. Skeleton — Telegram ⇄ FastAPI ⇄ Postgres.
-2. Extraction — logs → typed facts.
-3. RAG — grounded coaching.
-4. Gamification + dashboard — XP, progression, and read-only review in the
-   Telegram Mini App.
-5. Memory — longitudinal reasoning.
-6. Proactive agent — agent-decided interventions.
-7. Evals + observability — proof it works.
-8. Read-only Telegram dashboard — review habit state, logs, progress, and
-   interventions inside the Mini App.
-
-Post-v1 (explicitly later, becomes "future work" + v2 keywords): habit editing
-inside the dashboard, richer charts, MCP calendar/health integration, voice
-logging, multi-agent analysis, multi-user.
-
-## 10. Risks & mitigations
-
-- **Gimmick risk** (AI not load-bearing) → enforce the litmus test in §3; the
-  agent must *decide*, not just template messages.
-- **Over-notification** → hard daily cap + the agent can choose silence (m5).
-- **Generic advice** → RAG grounding requirement (m5/FR5); evals gate it (m6).
-- **Invented metrics** → metrics come from real usage + the harness only. Never
-  fabricate numbers for the resume.
-- **Privacy** → personal data stays in your own DB; no third-party calls beyond
-  the model/embeddings/Langfuse.
-- **Scope creep** → anything in §5 or §9-post-v1 is out until v1 ships.
-
-## 11. Open questions
-
-- Initial v1 habit plan seed:
-  - `FITNESS` → `run`: N times per week
-  - `FITNESS` → `gym`: N times per week
-  - `CAREER` → `leetcode`: daily
-  - `CAREER` → `personal project`: N times per week
-  - `SELF` → `read`: daily
-- Cadence and quiet hours for proactive checks? (Decide before m5.)
-- Cost ceiling per month? (Drives model + caching choices.)
+The product bar is simple: if the LLM were removed and the feature would still
+work just as well, the AI is decorative. Redesign the feature until the model is
+responsible for a real judgment: understanding logs, grounding advice, recalling
+patterns, or deciding whether to intervene.

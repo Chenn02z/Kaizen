@@ -1,4 +1,4 @@
-# Milestone 5 — Proactive agent
+# Milestone 6 — Proactive agent
 
 **Goal:** Assemble the LangGraph agent loop and add the scheduler so the agent
 *decides* when a proactive nudge adds value — and can choose to stay silent.
@@ -18,12 +18,12 @@ the decide-or-stay-silent reasoning step; a per-day intervention cap; the
 `interventions` table logging why each nudge was sent and whether it was engaged
 with.
 
-Out: evals + Langfuse harness (m6) — though leave the `interventions` table ready
+Out: evals + Langfuse harness (m7) — though leave the `interventions` table ready
 for it.
 
 ## Prerequisites
 
-Milestones 1–4 (all three tools exist and work standalone).
+Milestones 1–5 (all three tools exist and work standalone).
 
 ## Tasks
 

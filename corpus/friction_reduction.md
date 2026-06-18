@@ -1,9 +1,13 @@
 # Friction Reduction
 
-Friction reduction is the systematic removal of small obstacles that stand between you and a desired behavior. Even tiny inconveniences — an extra click, a bag left unpacked, a form to fill out — accumulate into significant barriers that determine whether habits survive or die.
+source: Atomic Habits and Tiny Habits
 
-The principle is derived from behavioral economics and choice architecture: behavior is disproportionately sensitive to the effort required to start. A two-minute setup step can prevent a habit from happening nearly as reliably as a major competing demand. Reducing friction is one of the highest-leverage interventions available.
+technique: friction reduction, ability design, make it easy
 
-When you audit a habit you keep skipping, trace the exact sequence of steps required to begin. You may find that the real barrier is not motivation but a small logistical bottleneck. If you are not meditating, is it because you have to find the app, choose a session, and sit somewhere quiet — all before you have had coffee? Reducing that to "sit down, tap one button, begin" removes almost all the resistance.
+lesson: When a habit fails, the useful first question is often not "why am I unmotivated?" but "what made this harder than it needed to be?" Atomic Habits emphasizes reducing steps between cue and action. Tiny Habits is even more explicit: when motivation is unreliable, increase ability by making the behavior smaller, simpler, and easier to start.
 
-Practical friction reduction techniques: pre-packing your gym bag the night before, setting out workout clothes, keeping your journal open on your desk, having a default meal option ready for days you lack energy to plan. Each of these eliminates a small decision that might have derailed the behavior. The goal is to make starting require almost no effort so that only genuine circumstances — illness, travel — become valid reasons to skip.
+use_when: Use this when the user says they skipped because setup was annoying, the gym was crowded, the app was hard to open, the task felt like too much, or a small logistical barrier blocked the habit.
+
+avoid_when: Avoid using friction reduction to excuse unclear priorities. If the user does not actually want the habit, first clarify the aspiration and desired identity.
+
+example_application: If evening reading loses to scrolling, put the book on the pillow, charge the phone outside the bedroom, and define success as opening the book to one page.

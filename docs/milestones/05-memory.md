@@ -1,4 +1,4 @@
-# Milestone 4 — Memory
+# Milestone 5 — Memory
 
 **Goal:** The agent reasons over multi-week history without stuffing raw logs into
 the context window, and can surface personal patterns.
@@ -14,8 +14,11 @@ In: Mem0 integration over the stored logs/facts plus the user's habit plan, a
 `recall_history` capability, and pattern surfacing (e.g. "you relapse on
 low-sleep days" or "you miss gym on weeks with late nights"). Reflection queries
 ("how was this week?", "when do I usually slip?") answered from memory + facts.
+Action-oriented reflection questions ("what should I try tomorrow?") may later
+retrieve lessons from the RAG corpus after memory identifies the relevant
+pattern.
 
-Out: proactive sending and the scheduler (m5), evals (m6).
+Out: proactive sending and the scheduler (m6), evals (m7).
 
 ## Prerequisites
 

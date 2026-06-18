@@ -1,9 +1,13 @@
 # Implementation Intentions
 
-Implementation intentions are "if-then" plans that link a specific situation to a specific action. Instead of a vague goal like "I will exercise more," you commit to an exact when, where, and how: "When Tuesday arrives and I finish lunch, I will put on my running shoes and head to the park."
+source: Atomic Habits and Tiny Habits
 
-The psychology behind this technique is that pre-deciding the cue and the response removes the need to deliberate in the moment. When the trigger situation appears, the action fires more automatically, bypassing the friction of choice and reducing reliance on willpower.
+technique: implementation intentions, specific prompts, when-where-how planning
 
-When you struggle to follow through on a habit, ask yourself whether you have actually specified when and where it will happen. "I want to meditate daily" becomes "When I pour my morning coffee, I will sit at the kitchen table and meditate for ten minutes before checking my phone." The more vivid and concrete the if-then plan, the stronger the mental link.
+lesson: A vague intention asks the future self to decide again. A strong implementation intention removes that second decision by naming the exact prompt, place, and first movement. Atomic Habits supplies the cue-response structure; Tiny Habits sharpens it by asking for the action that happens immediately after a reliable prompt and can be completed even on an average day.
 
-For recovery from a missed session, you can layer a defensive implementation intention: "If I miss my evening run, then I will do a 15-minute walk before dinner instead." This protects you from the all-or-nothing trap and keeps your streak of intention alive even when the ideal plan falls apart.
+use_when: Use this when the user says they want to start, should do something, will do it later, or keeps missing because the habit has no clear time and place.
+
+avoid_when: Avoid this when the selected behavior is still too ambitious. First shrink the behavior until the planned action is easy enough to perform at the chosen prompt.
+
+example_application: Instead of "I will meditate tomorrow," use: after I pour my morning coffee, I will sit at the kitchen table and take three slow breaths before checking my phone.

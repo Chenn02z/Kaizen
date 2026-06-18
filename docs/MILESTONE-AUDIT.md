@@ -1,6 +1,6 @@
 # Kaizen Milestone Audit
 
-Last reviewed: 2026-06-17
+Last reviewed: 2026-06-18
 
 This audit compares the milestone specs in `docs/milestones/` against the
 current implementation and tests in the repo.
@@ -16,7 +16,9 @@ current implementation and tests in the repo.
 | `05-memory` | partially implemented | `tests/memory/test_memory.py` | Memory recall and bounded reflection context exist. Pattern detection is still shallow and not yet expressed against a first-class habit plan. |
 | `06-proactive-agent` | partially implemented | `tests/agent/test_proactive.py`, `tests/habits/test_habit_plan.py` | Proactive nudges, silence decisions, scheduler, daily cap, due-habit evaluation, and same-day fallback `check-in`s exist. Quiet-hours configuration and richer engagement tracking remain shallow. |
 | `07-evals-observability` | partially implemented | `tests/evals/*`, `evals/RESULTS.md`, `app/llm/client.py` | Retrieval and judge harness exist, and Langfuse wiring exists. A real intervention/adherence correlation report is still missing. |
-| `08-dashboard` | planned | `docs/milestones/08-dashboard.md` | Read-only Telegram Mini App dashboard for habit state, recent logs, progress, and interventions. |
+| `08-dashboard` | partially implemented | `docs/milestones/08-dashboard.md`, `tests/test_dashboard.py`, `tests/test_webhook.py` | Backend read model and Telegram command launch exist. Frontend completeness and Milestone 8 acceptance still need final verification. |
+| `09-correction-loop` | planned | `docs/milestones/09-correction-loop.md` | Chat-based corrections and auditable evidence overrides are needed because extraction intentionally prefers precision over recall. |
+| `10-lesson-grounded-reflection` | planned | `docs/milestones/10-lesson-grounded-reflection.md` | Reflection questions and proactive ticks should retrieve self-authored lesson notes when the user asks what to change or when a nudge is justified. |
 
 ## Key findings
 
@@ -39,21 +41,24 @@ current implementation and tests in the repo.
 
 ### What still does not match the tightened product direction
 
-- The Mini App is still a stats sheet rather than the main `dashboard`.
-- There is no read model for today's habit state, recent `log`s, or recorded
-  `intervention`s.
-- Telegram launch still needs a first-class `web_app` command path, not just a
-  startup menu-button registration.
+- Milestone 8 still needs final verification against the Telegram Mini App
+  acceptance criteria, especially frontend rendering and production launch
+  behavior.
+- Reflection questions currently use memory/history, but action-oriented
+  reflection does not yet retrieve lessons from the RAG corpus.
+- Proactive tick retrieval can still become too generic unless the lesson query
+  is built from due habits, recent drift, triggers, and memory.
 
 ## Recommended next implementation step
 
-Build Milestone 8 first:
+Build in this order:
 
-1. Telegram-native Mini App launch from `/start` and `/dashboard`
-2. dashboard read model over habits, logs, progress, and interventions
-3. read-only Mini App sections for today, habits, recent logs, and interventions
-4. docs for BotFather/public URL setup
+1. Milestone 8: Telegram-native Mini App launch, dashboard read model, and
+   read-only review sections.
+2. Milestone 9: correction loop, so trusted habit state can be repaired before
+   it drives more nudges.
+3. Milestone 10: lesson-grounded reflection and lesson-aware proactive retrieval.
 
-That is the shortest path from the current implementation to the product
-behavior defined in `docs/PRODUCT.md`, `docs/CONTEXT.md`, and
-`docs/milestones/08-dashboard.md`.
+That keeps the product focused on the core wedge: natural-language logs become
+trusted habit state, and Kaizen applies the builder's own grounded lessons only
+when they fit the user's real history.

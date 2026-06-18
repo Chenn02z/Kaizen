@@ -1,9 +1,13 @@
 # Reward Substitution
 
-Reward substitution replaces the immediate reward of an unwanted behavior with a different, immediate reward for the desired behavior. Because our brains are strongly biased toward now over later, you cannot reliably override an immediate reward with a promise of future benefit — but you can compete reward for reward.
+source: Atomic Habits and Tiny Habits
 
-The mechanism is dopaminergic: the brain's motivation circuits respond to immediate cues of reward. By attaching a genuine pleasurable signal to the behavior you want to reinforce, you can make the desired action feel satisfying in the moment rather than purely effortful.
+technique: reward substitution, make it satisfying, celebration
 
-When you are trying to swap a habit of scrolling social media before bed with a reading habit, identify what makes scrolling rewarding — novelty, passive engagement, a sense of connection — and choose a reading genre that delivers something similar. An engaging novel or narrative nonfiction gives your brain novelty and story. The substitution works best when the new reward is genuinely pleasurable, not just "good for you."
+lesson: A replacement habit needs a near-term reward, not only a distant benefit. Atomic Habits highlights satisfaction as the step that makes repetition more likely. Tiny Habits makes the reward immediate by using celebration and positive emotion right after the behavior. The useful move is to identify what the old behavior provides, then attach an honest, immediate reward to the better behavior.
 
-Apply this to exercise by finding a form of movement you actually enjoy rather than one that feels like punishment. If running feels like suffering but dancing or recreational sport feels fun, the substitute activity is more sustainable because the reward is built in. The goal is to shrink the gap between the effort and the pleasure so your brain learns to associate the healthy behavior with feeling good rather than feeling virtuous.
+use_when: Use this when the user is trying to replace scrolling, snacking, skipping, or another immediately rewarding behavior with something healthier but less instantly gratifying.
+
+avoid_when: Avoid fake rewards the user does not actually enjoy. A substitute must be emotionally real or the old behavior will keep winning.
+
+example_application: If boredom drives 3pm chips, replace the snack loop with tea plus a five-minute walk outside, then deliberately mark the feeling of having reset the afternoon.

@@ -1,4 +1,4 @@
-# Milestone 6 — Evals & observability
+# Milestone 7 — Evals & observability
 
 **Goal:** Prove the AI is good with measurable evals, and trace every model call.
 This is the milestone that turns the project from a hobby into a case study.
@@ -18,7 +18,7 @@ Out: new product features. This milestone measures what exists.
 
 ## Prerequisites
 
-Milestones 1–5 (a full pipeline to evaluate). Reuse the hand-written examples
+Milestones 1–6 (a full pipeline to evaluate). Reuse the hand-written examples
 saved in m2/m3.
 
 ## Tasks

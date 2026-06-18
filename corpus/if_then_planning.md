@@ -1,9 +1,13 @@
 # If-Then Planning
 
-If-then planning is a structured form of goal-setting where you specify exactly what you will do when a specific obstacle or opportunity arises. It is closely related to implementation intentions but focuses particularly on handling disruptions and competing demands rather than just setting a trigger for routine execution.
+source: Atomic Habits and Tiny Habits
 
-The technique works because most habit failures happen at decision points — a moment when something unexpected arises and you have not pre-decided what to do. By planning for those moments in advance, you remove the cognitive load of deciding under pressure.
+technique: if-then planning, obstacle planning, backup behaviors
 
-When you anticipate the situations that typically derail your habits, you can write out if-then contingencies: "If a colleague asks me to get drinks after work on a gym day, I will say yes but go to the gym first." "If I wake up and feel too tired to exercise, I will do a ten-minute walk instead of skipping entirely." These are not backup plans that signal defeat — they are sophisticated responses to reality.
+lesson: If-then planning turns a predictable obstacle into a pre-decided response. Atomic Habits is useful here because it pushes specificity around cues and actions. Tiny Habits improves the plan by making the fallback tiny enough to succeed under low motivation. The best plan names the obstacle, the next action, and the minimum version that still counts.
 
-The most common obstacle types to plan for are social pressure, fatigue, time conflicts, and travel. For each habit you care about, try to identify the two or three most common failure scenarios, and write explicit if-then responses. Reviewing these contingencies periodically keeps them active in working memory, making it more likely you act on them when the real situation arrives.
+use_when: Use this when the user's log reveals a repeating blocker: tired evenings, crowded gym, stressful work, travel, social pressure, bad sleep, or boredom at a specific time.
+
+avoid_when: Avoid writing many contingencies at once. Too many plans become another burden. Pick the one blocker that caused the latest miss.
+
+example_application: If the gym is packed, then the user does the 12-minute dumbbell routine at home; if even that feels too much, they do two pushups to keep the identity alive.

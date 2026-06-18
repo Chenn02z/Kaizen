@@ -9,6 +9,8 @@ Canonical terminology for product discussions and milestone planning.
   missed, or nudged.
 - `log`: a user's freeform Telegram message about their day, behavior, or
   reflection.
+- `reflection question`: a user message that asks Kaizen to analyze history,
+  patterns, or next actions rather than record a new `log`.
 - `multi-habit log`: a single `log` that provides evidence for more than one
   `habit`. In v1, one log may satisfy multiple habits if the message clearly
   mentions each one.
@@ -23,6 +25,12 @@ Canonical terminology for product discussions and milestone planning.
 - `precision bias`: when habit matching is ambiguous, Kaizen should prefer
   leaving a `log` unmatched rather than over-crediting a `habit`. In v1, trust
   is more important than maximizing automatic matches.
+- `correction`: a user message that repairs Kaizen's interpretation of a prior
+  `log`, such as counting clear evidence that was missed or undoing credit that
+  should not have been granted.
+- `evidence override`: the auditable result of a `correction`. It changes the
+  effective habit state for a habit/date while preserving the original `log` and
+  extracted facts for inspection.
 - `habit plan`: the explicit definition of a `habit`, including its intended
   cadence, success condition, known triggers, goals, and optional habit aliases.
   Kaizen uses the habit plan as the source of truth when deciding whether the
@@ -38,12 +46,18 @@ Canonical terminology for product discussions and milestone planning.
 - `fallback check-in`: a same-day `check-in` Kaizen may send automatically when
   a due `habit` has no relevant `log` by its expected window. It should be sent
   at most once per day and only for habits that were actually due.
+- `lesson`: the user's own concise synthesis of an idea from a book, article, or
+  experience. A lesson is written in the user's own words and maps to at least
+  one `technique`.
 - `technique`: a grounded behavioral-science method retrieved from the corpus.
+  Techniques are the reusable methods; lessons are the user's notes explaining
+  when and how to apply them.
 - `nudge`: a proactive message sent by the agent.
 - `intervention`: a `nudge` that is intentionally delivered, recorded, and
   reviewed.
 - `quiet hours`: times when proactive messages must stay silent.
-- `grounded`: advice tied to a real `technique` and the user's own history.
+- `grounded`: advice tied to a real `technique`, a retrieved `lesson` when
+  relevant, and the user's own history.
 - `dashboard`: the Telegram Mini App surface for read-only review of habit
   state, recent logs, progress, and recorded interventions. In v1, the
   dashboard does not create or edit habit plans; Telegram chat remains the

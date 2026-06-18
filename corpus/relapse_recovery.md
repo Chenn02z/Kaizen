@@ -1,9 +1,13 @@
 # Relapse Recovery
 
-Relapse recovery is the practice of returning to a behavior as quickly as possible after a lapse, without punishing yourself or treating the lapse as proof of permanent failure. The key insight is that missing once rarely damages a habit — but missing twice in a row begins to break it.
+source: Atomic Habits and Tiny Habits
 
-The research on habit resilience shows that a single missed day has almost no statistical effect on long-term habit formation. What matters is the response to the lapse. People who recover quickly and without self-criticism maintain habits far better than those who spiral into guilt and abandonment.
+technique: relapse recovery, reset plan, minimum viable habit
 
-When you skip a planned workout, miss a meditation session, or break a streak, the most important thing you can do is prevent the second miss. Do not wait until Monday or next month to restart. The very next opportunity — even a scaled-down version of the habit — is where recovery happens. A short five-minute walk on the day after you skipped the gym counts. It signals to your brain that you are still someone who shows up.
+lesson: A lapse is most dangerous when it changes the user's story from "I missed once" to "I am off track." Atomic Habits suggests protecting the pattern by returning quickly after a miss. Tiny Habits gives the practical recovery move: make the next behavior tiny enough that restarting feels easy. Recovery should preserve identity and produce a next action, not litigate the failure.
 
-The mantra here is: never miss twice. One miss is an accident; two misses is the start of a new (unwanted) habit. When you fall off, treat it as neutral data rather than evidence of character. Ask "what made it hard?" and adjust your plan, then do the smallest version of the behavior as soon as you reasonably can.
+use_when: Use this when the user missed a workout, broke a streak, overate, skipped meditation, or says they are starting over after several rough days.
+
+avoid_when: Avoid pushing immediate restart when the miss came from illness, injury, grief, or genuine overload. Then the recovery behavior may be rest, planning, or a smaller health-supporting action.
+
+example_application: If the user missed three workouts, do not prescribe a full makeup session. Ask for one tiny restart today: put on workout clothes and do five bodyweight squats.
