@@ -44,7 +44,7 @@ Telegram:
 4. Use `/start`, `/dashboard`, or the bot menu button to open the read-only
    dashboard in Telegram.
 
-For a hosted deployment, use the Render blueprint and checklist in
+For a hosted deployment, use the AWS EC2 + RDS checklist in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Load the corpus (RAG)
