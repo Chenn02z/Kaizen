@@ -5,6 +5,8 @@ APP_DIR="${APP_DIR:-/opt/kaizen/Kaizen}"
 APP_USER="${APP_USER:-ubuntu}"
 ENV_FILE="${ENV_FILE:-/opt/kaizen/.env}"
 
+export PATH="$HOME/.local/bin:$PATH"
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing $ENV_FILE. Create it from .env.example with production values first." >&2
   exit 1
