@@ -12,6 +12,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# Export production env vars for bootstrap-time commands like Alembic and the
+# corpus loader. The systemd unit reads the same file at runtime.
+set -a
+source "$ENV_FILE"
+set +a
+
 sudo apt-get update
 sudo apt-get install -y curl git nginx python3 ca-certificates
 
