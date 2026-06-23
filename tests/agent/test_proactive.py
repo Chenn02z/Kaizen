@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.agent.runner import run_tick
-from app.db.models import Intervention
+from app.db.models import HabitEvidenceOverride, Intervention
 from app.db.session import AsyncSessionLocal
 from app.main import app
 
@@ -222,6 +222,40 @@ async def test_daily_cap_blocks_second_tick(db_session, monkeypatch) -> None:
     assert rows[0].reason == "daily cap reached"
 
     mock_send.assert_not_awaited()
+
+
+async def test_tick_prompt_uses_corrected_habit_state(db_session, monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    async with AsyncSessionLocal() as session:
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=None,
+                habit_name="read",
+                target_date=_today_at(13).date(),
+                override_status="yes",
+                user_text="count that as reading",
+                reason="test correction",
+            )
+        )
+        await session.commit()
+
+    async def _capture_complete(*args, **kwargs):
+        captured["content"] = kwargs["messages"][0]["content"]
+        return _make_decide_response(
+            action="silent",
+            reason="User completed a corrected habit already",
+        )
+
+    monkeypatch.setattr("app.agent.graph.complete", _capture_complete)
+    monkeypatch.setattr("app.agent.tools._recall_history", lambda q, uid, limit=5: "")
+    monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
+    monkeypatch.setattr("app.agent.runner.send_message", AsyncMock())
+
+    await run_tick(USER_ID, now=_today_at(13))
+
+    assert "read: done corrected" in captured["content"]
 
 
 # ---------------------------------------------------------------------------

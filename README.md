@@ -47,6 +47,22 @@ Telegram:
 For a hosted deployment, use the AWS EC2 + RDS checklist in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
+## Correction loop
+
+If Kaizen misreads a `log`, correct it directly in Telegram instead of waiting
+for the next day. V1 supports explicit chat corrections such as:
+
+- `count that as gym`
+- `count my last log as partial for gym`
+- `undo gym credit for today`
+- `mark sleep as missed`
+- `that was not a workout`
+
+Corrections are append-only audit records. Kaizen keeps the original `log` and
+original extracted facts, applies the newest correction to habit-state
+computation, updates XP/progress from the corrected state, and marks corrected
+evidence in the dashboard.
+
 ## Load the corpus (RAG)
 
 The grounded-coaching corpus lives in `corpus/*.md`. After migrations, embed it

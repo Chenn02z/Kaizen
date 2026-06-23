@@ -107,6 +107,7 @@ async def recall(state: AgentState) -> AgentState:
 async def decide(state: AgentState) -> AgentState:
     """Tick path: call the LLM to decide whether to send a proactive nudge."""
     history = state.get("history") or ""
+    habit_state_summary = state.get("habit_state_summary") or ""
     chunks = state.get("retrieved_chunks") or []
     techniques_text = "\n\n---\n\n".join(c.content for c in chunks)
 
@@ -115,6 +116,7 @@ async def decide(state: AgentState) -> AgentState:
     techniques_section = techniques_text[:2000]
 
     context = (
+        f"Today's effective habit state:\n{habit_state_summary[:1000]}\n\n"
         f"User's recent behavioral history:\n{history_section}\n\n"
         f"Relevant behavioral-science techniques:\n{techniques_section}"
     )

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -5,7 +6,8 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.config import settings
-from app.db.models import Log
+from app.dashboard import DashboardData
+from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log, UserProgress
 from app.db.session import AsyncSessionLocal
 from app.main import app, get_send_message
 from app.telegram.webapp import dashboard_inline_keyboard
@@ -31,6 +33,12 @@ def _make_update(user_id: int, text: str = "hello") -> dict:
 async def _log_count() -> int:
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(func.count()).select_from(Log))
+        return result.scalar_one()
+
+
+async def _override_count() -> int:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(func.count()).select_from(HabitEvidenceOverride))
         return result.scalar_one()
 
 
@@ -205,3 +213,199 @@ async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
         text="Open your dashboard:",
         reply_markup=dashboard_inline_keyboard(),
     )
+
+
+async def test_false_negative_correction_updates_dashboard_and_keeps_audit_rows(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    import app.dashboard as dashboard_module
+
+    now = datetime(2026, 6, 21, 21, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(dashboard_module, "utcnow", lambda: now)
+
+    async with AsyncSessionLocal() as session:
+        log = Log(
+            telegram_user_id=ALLOWED_UID,
+            text="worked out hard after lunch",
+            created_at=datetime(2026, 6, 21, 12, 0, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=[],
+                adherence=None,
+            )
+        )
+        await session.commit()
+
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    before = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    before_habits = {habit.name: habit for habit in before.habits}
+    assert before_habits["gym"].today_status == "missing"
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="count that as gym"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 1
+    assert await _override_count() == 1
+    mock_send.assert_awaited_once()
+
+    after = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    after_habits = {habit.name: habit for habit in after.habits}
+    assert after_habits["gym"].today_status == "done"
+    assert after_habits["gym"].is_corrected_today is True
+
+    async with AsyncSessionLocal() as session:
+        facts = (await session.execute(select(ExtractedFacts))).scalar_one()
+        override = (await session.execute(select(HabitEvidenceOverride))).scalar_one()
+    assert facts.habits == []
+    assert override.habit_name == "gym"
+
+
+async def test_false_positive_correction_removes_completion_credit(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    import app.dashboard as dashboard_module
+
+    now = datetime(2026, 6, 21, 21, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(dashboard_module, "utcnow", lambda: now)
+
+    async with AsyncSessionLocal() as session:
+        log = Log(
+            telegram_user_id=ALLOWED_UID,
+            text="great workout today",
+            created_at=datetime(2026, 6, 21, 8, 0, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=["gym"],
+                adherence="yes",
+            )
+        )
+        await session.commit()
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="that was not a workout"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _override_count() == 1
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    after = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    after_habits = {habit.name: habit for habit in after.habits}
+    assert after_habits["gym"].today_status == "missing"
+
+
+async def test_ambiguous_correction_asks_follow_up_and_skips_override(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    async with AsyncSessionLocal() as session:
+        log = Log(
+            telegram_user_id=ALLOWED_UID,
+            text="did both run and gym",
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=["run", "gym"],
+                adherence="yes",
+            )
+        )
+        await session.commit()
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="do not use that as evidence next time"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _override_count() == 0
+    assert await _log_count() == 1
+    sent_text = mock_send.await_args.kwargs["text"]
+    assert "Which habit should I correct?" in sent_text
+
+
+async def test_retrying_same_correction_keeps_progress_idempotent(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    async with AsyncSessionLocal() as session:
+        log = Log(
+            telegram_user_id=ALLOWED_UID,
+            text="worked out hard after lunch",
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=[],
+                adherence=None,
+            )
+        )
+        await session.commit()
+
+    for _ in range(2):
+        mock_send = AsyncMock()
+        app.dependency_overrides[get_send_message] = lambda: mock_send
+        try:
+            response = await client.post(
+                "/webhook",
+                json=_make_update(ALLOWED_UID, text="count that as gym"),
+                headers=VALID_HEADERS,
+            )
+        finally:
+            app.dependency_overrides.pop(get_send_message, None)
+        assert response.status_code == 200
+
+    async with AsyncSessionLocal() as session:
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+        overrides = (
+            await session.execute(
+                select(HabitEvidenceOverride).where(
+                    HabitEvidenceOverride.telegram_user_id == ALLOWED_UID
+                )
+            )
+        ).scalars().all()
+
+    assert progress.xp == 50
+    assert progress.level == 1
+    assert len(overrides) == 2

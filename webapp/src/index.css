@@ -92,3 +92,9 @@ body {
   display: block;
   white-space: normal;
 }
+
+.correction-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--tg-theme-link-color, #66a6ff);
+}

@@ -5,8 +5,20 @@ from pydantic import BaseModel
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ExtractedFacts, HabitCategory, HabitPlan, HabitProgress, Intervention, Log
+from app.db.models import (
+    ExtractedFacts,
+    HabitCategory,
+    HabitPlan,
+    HabitProgress,
+    Intervention,
+    Log,
+)
 from app.gamification.stats import UserStats, get_user_stats
+from app.habits.evidence import (
+    EffectiveEvidenceLedger,
+    build_effective_evidence_ledger,
+    is_positive_status,
+)
 from app.habits.plan import HabitPlanContext, get_habit_plan_context, habit_due_today
 
 DashboardHabitStatus = Literal["done", "missing", "not_due", "unknown"]
@@ -21,6 +33,7 @@ class DashboardHabit(BaseModel):
     cadence_value: Any = None
     success_condition: str
     today_status: DashboardHabitStatus
+    is_corrected_today: bool = False
 
 
 class DashboardLog(BaseModel):
@@ -32,6 +45,7 @@ class DashboardLog(BaseModel):
     mood: str | None = None
     trigger: str | None = None
     context: str | None = None
+    corrected_habits: list[str] = []
 
 
 class DashboardIntervention(BaseModel):
@@ -60,17 +74,26 @@ async def get_dashboard_data(
     await get_habit_plan_context(session, telegram_user_id)
     progress = await get_user_stats(telegram_user_id, session)
     plans = await _load_habit_plans(session, telegram_user_id)
-    today_done, week_counts = await _load_completion_state(session, telegram_user_id, current)
+    week_start = current.date() - timedelta(days=current.date().weekday())
+    ledger = await build_effective_evidence_ledger(
+        session,
+        telegram_user_id,
+        start_date=week_start,
+        end_date=current.date(),
+    )
+    today_states = ledger.states_by_date.get(current.date(), {})
+    week_counts = _count_positive_days(ledger)
     recent_logs = await _load_recent_logs(session, telegram_user_id)
+    recent_corrections = await build_effective_evidence_ledger(session, telegram_user_id)
     recent_interventions = await _load_recent_interventions(session, telegram_user_id)
 
     return DashboardData(
         progress=progress,
         habits=[
-            _build_habit_row(plan, habit_progress, current, today_done, week_counts)
+            _build_habit_row(plan, habit_progress, current, today_states, week_counts)
             for plan, habit_progress in plans
         ],
-        recent_logs=recent_logs,
+        recent_logs=_attach_corrections_to_logs(recent_logs, recent_corrections),
         recent_interventions=recent_interventions,
     )
 
@@ -112,33 +135,6 @@ async def _load_habit_plans(
             )
         )
     return rows
-
-
-async def _load_completion_state(
-    session: AsyncSession, telegram_user_id: int, now: datetime
-) -> tuple[set[str], dict[str, int]]:
-    today = now.date()
-    week_start = today - timedelta(days=today.weekday())
-    week_end = week_start + timedelta(days=7)
-    result = await session.execute(
-        select(Log.created_at, ExtractedFacts.habits, ExtractedFacts.adherence)
-        .join(ExtractedFacts, ExtractedFacts.log_id == Log.id, isouter=True)
-        .where(Log.telegram_user_id == telegram_user_id)
-        .where(Log.created_at >= _day_start(week_start))
-        .where(Log.created_at < _day_start(week_end))
-        .order_by(desc(Log.created_at))
-    )
-
-    today_done: set[str] = set()
-    week_counts: dict[str, int] = {}
-    for created_at, habits, adherence in result.all():
-        if adherence not in {"yes", "partial"}:
-            continue
-        for habit in habits or []:
-            week_counts[habit] = week_counts.get(habit, 0) + 1
-            if created_at.date() == today:
-                today_done.add(habit)
-    return today_done, week_counts
 
 
 async def _load_recent_logs(session: AsyncSession, telegram_user_id: int) -> list[DashboardLog]:
@@ -193,10 +189,11 @@ def _build_habit_row(
     plan: HabitPlanContext,
     habit_progress: HabitProgress | None,
     now: datetime,
-    today_done: set[str],
+    today_states: dict[str, Any],
     week_counts: dict[str, int],
 ) -> DashboardHabit:
-    done = plan.habit_name in today_done
+    today_state = today_states.get(plan.habit_name)
+    done = today_state is not None and is_positive_status(today_state.status)
     due_today = habit_due_today(plan, now.date(), week_counts.get(plan.habit_name, 0))
     if done:
         status: DashboardHabitStatus = "done"
@@ -214,7 +211,31 @@ def _build_habit_row(
         cadence_value=plan.cadence_value,
         success_condition=plan.success_condition,
         today_status=status,
+        is_corrected_today=bool(today_state.corrected) if today_state else False,
     )
+
+
+def _attach_corrections_to_logs(
+    logs: list[DashboardLog], ledger: EffectiveEvidenceLedger
+) -> list[DashboardLog]:
+    log_map = {
+        entry.log_id: [state.habit_name for state in entry.effective_habits if state.corrected]
+        for entry in ledger.logs
+    }
+    return [
+        log.model_copy(update={"corrected_habits": log_map.get(log.id, [])})
+        for log in logs
+    ]
+
+
+def _count_positive_days(ledger: EffectiveEvidenceLedger) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for day_states in ledger.states_by_date.values():
+        for state in day_states.values():
+            if not is_positive_status(state.status):
+                continue
+            counts[state.habit_name] = counts.get(state.habit_name, 0) + 1
+    return counts
 
 
 def _day_start(day: date) -> datetime:

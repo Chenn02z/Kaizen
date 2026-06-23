@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.dashboard import DashboardData
-from app.db.models import ExtractedFacts, Intervention, Log, UserProgress
+from app.db.models import ExtractedFacts, HabitEvidenceOverride, Intervention, Log, UserProgress
 from app.db.session import AsyncSessionLocal
 
 USER_ID = settings.allowed_user_id
@@ -81,3 +81,52 @@ async def test_dashboard_endpoint_returns_read_model(
     assert dashboard.recent_logs[0].text == "did leetcode and worked on the app"
     assert dashboard.recent_logs[0].habits == ["leetcode"]
     assert dashboard.recent_interventions[0].kind == "proactive"
+
+
+async def test_dashboard_reveals_corrected_habit_state(
+    client,
+    db_session,
+    monkeypatch,
+) -> None:
+    now = datetime(2026, 6, 17, 21, 0, tzinfo=timezone.utc)
+    import app.dashboard as dashboard_module
+
+    monkeypatch.setattr(dashboard_module, "utcnow", lambda: now)
+
+    async with AsyncSessionLocal() as session:
+        log = Log(
+            telegram_user_id=USER_ID,
+            text="worked out hard after lunch",
+            created_at=datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=[],
+                adherence=None,
+            )
+        )
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=log.id,
+                habit_name="gym",
+                target_date=now.date(),
+                override_status="yes",
+                user_text="count that as gym",
+                reason="test correction",
+            )
+        )
+        await session.commit()
+
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    response = await client.get("/dashboard", params=params)
+    assert response.status_code == 200
+    dashboard = DashboardData.model_validate(response.json())
+
+    habits = {habit.name: habit for habit in dashboard.habits}
+    assert habits["gym"].today_status == "done"
+    assert habits["gym"].is_corrected_today is True
+    assert "gym" in dashboard.recent_logs[0].corrected_habits

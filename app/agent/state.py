@@ -13,6 +13,7 @@ class AgentState(TypedDict, total=False):
     facts: Optional[Any]  # ExtractedFacts | None
     retrieved_chunks: list[Any]  # list[CorpusChunk]
     history: str
+    habit_state_summary: str
 
     # Output fields
     decision: str  # "respond" | "silent"

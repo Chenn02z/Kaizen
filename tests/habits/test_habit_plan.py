@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.db.models import ExtractedFacts, Log
+from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log
 from app.db.session import AsyncSessionLocal
 from app.habits.plan import due_habits_missing_evidence, get_habit_plan_context
 
@@ -51,3 +51,65 @@ async def test_due_habits_use_cadence_and_today_evidence(db_session) -> None:
     names = {habit.habit_name for habit in due}
     assert "leetcode" not in names
     assert "read" in names
+
+
+async def test_due_habits_respect_positive_override(db_session) -> None:
+    now = datetime(2026, 6, 15, 21, 0, tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=None,
+                habit_name="read",
+                target_date=now.date(),
+                override_status="yes",
+                user_text="count my reading as done",
+                reason="test positive override",
+            )
+        )
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        due = await due_habits_missing_evidence(session, USER_ID, now)
+
+    names = {habit.habit_name for habit in due}
+    assert "read" not in names
+
+
+async def test_due_habits_respect_negative_override(db_session) -> None:
+    now = datetime(2026, 6, 15, 21, 0, tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        log = Log(
+            telegram_user_id=USER_ID,
+            text="did leetcode",
+            created_at=datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=["leetcode"],
+                adherence="yes",
+            )
+        )
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=log.id,
+                habit_name="leetcode",
+                target_date=now.date(),
+                override_status="no",
+                user_text="undo leetcode credit for today",
+                reason="test negative override",
+            )
+        )
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        due = await due_habits_missing_evidence(session, USER_ID, now)
+
+    names = {habit.habit_name for habit in due}
+    assert "leetcode" in names

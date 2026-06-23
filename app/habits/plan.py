@@ -5,7 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ExtractedFacts, HabitCategory, HabitPlan, Intervention, Log
+from app.db.models import HabitCategory, HabitPlan, Intervention
+from app.habits.evidence import build_effective_evidence_ledger, is_positive_status
 
 _DEFAULT_WINDOW = "20:00"
 _WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -190,26 +191,24 @@ async def due_habits_missing_evidence(
         return []
 
     plans = await get_habit_plan_context(session, telegram_user_id)
-    completed_today = await _completed_habits_between(
+    ledger = await build_effective_evidence_ledger(
         session,
         telegram_user_id,
-        _day_start(current.date()),
-        _day_start(current.date() + timedelta(days=1)),
+        start_date=_week_start(current.date()),
+        end_date=current.date(),
     )
-    completed_this_week = await _completed_habits_between(
-        session,
-        telegram_user_id,
-        _day_start(_week_start(current.date())),
-        _day_start(_week_start(current.date()) + timedelta(days=7)),
-    )
+    today_states = ledger.states_by_date.get(current.date(), {})
+    completed_this_week = _weekly_positive_counts(ledger.states_by_date)
 
     due: list[DueHabit] = []
     for plan in plans:
         if not plan.fallback_checkin_enabled:
             continue
-        if plan.habit_name in completed_today:
+        if plan.habit_name in today_states and is_positive_status(
+            today_states[plan.habit_name].status
+        ):
             continue
-        reason = _due_reason(plan, current.date(), completed_this_week.count(plan.habit_name))
+        reason = _due_reason(plan, current.date(), completed_this_week.get(plan.habit_name, 0))
         if reason is not None:
             due.append(
                 DueHabit(
@@ -288,29 +287,19 @@ def habit_due_today(plan: HabitPlanContext, today: date, weekly_completed: int) 
     return False
 
 
-async def _completed_habits_between(
-    session: AsyncSession,
-    telegram_user_id: int,
-    start: datetime,
-    end: datetime,
-) -> list[str]:
-    result = await session.execute(
-        select(ExtractedFacts.habits)
-        .join(Log, Log.id == ExtractedFacts.log_id)
-        .where(Log.telegram_user_id == telegram_user_id)
-        .where(Log.created_at >= start)
-        .where(Log.created_at < end)
-        .where(ExtractedFacts.adherence.in_(["yes", "partial"]))
-    )
-    habits: list[str] = []
-    for row_habits in result.scalars():
-        habits.extend(row_habits or [])
-    return habits
-
-
 def _day_start(day: date) -> datetime:
     return datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
 
 
 def _week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
+
+
+def _weekly_positive_counts(states_by_date: dict[date, dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for day_states in states_by_date.values():
+        for state in day_states.values():
+            if not is_positive_status(state.status):
+                continue
+            counts[state.habit_name] = counts.get(state.habit_name, 0) + 1
+    return counts

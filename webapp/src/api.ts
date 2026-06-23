@@ -22,6 +22,7 @@ export interface DashboardHabit {
   cadence_value: string | number | string[] | null
   success_condition: string
   today_status: DashboardHabitStatus
+  is_corrected_today: boolean
 }
 
 export interface DashboardLog {
@@ -33,6 +34,7 @@ export interface DashboardLog {
   mood: string | null
   trigger: string | null
   context: string | null
+  corrected_habits: string[]
 }
 
 export interface DashboardIntervention {

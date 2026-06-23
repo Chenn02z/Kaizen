@@ -110,6 +110,11 @@ export default function App() {
                       <Caption level="2" style={{ display: 'block', marginTop: 6 }}>
                         {habit.success_condition}
                       </Caption>
+                      {habit.is_corrected_today ? (
+                        <Caption level="2" className="correction-note">
+                          Corrected in chat
+                        </Caption>
+                      ) : null}
                     </div>
                   </div>
                 ))
@@ -126,6 +131,11 @@ export default function App() {
                     subtitle={formatLogMeta(log)}
                   >
                     <span className="log-text">{excerpt(log.text)}</span>
+                    {log.corrected_habits.length > 0 ? (
+                      <Caption level="2" className="correction-note">
+                        Corrected: {log.corrected_habits.join(', ')}
+                      </Caption>
+                    ) : null}
                   </Cell>
                 ))
               )}

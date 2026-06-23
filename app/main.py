@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.agent.runner import run_user_message
 from app.agent.scheduler import start_scheduler, stop_scheduler
 from app.config import settings
+from app.corrections.service import handle_correction_message
 from app.dashboard import DashboardData, get_dashboard_data
 from app.db.models import ExtractedFacts as ExtractedFactsModel
 from app.db.models import Log
@@ -21,7 +22,8 @@ from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
 from app.gamification.stats import UserStats, get_user_stats
-from app.gamification.xp import XPResult, award_xp
+from app.gamification.xp import XPResult
+from app.habits.evidence import recompute_progress_from_effective_state
 from app.habits.plan import get_habit_plan_context
 from app.llm.client import complete
 from app.memory.recall import detect_patterns, recall_history
@@ -204,6 +206,17 @@ async def webhook(
             await _send(chat_id=message.chat.id, text="Open your dashboard:", reply_markup=reply_markup)
         return {}
 
+    async with AsyncSessionLocal() as session:
+        correction = await handle_correction_message(
+            session,
+            telegram_user_id=message.from_.id,
+            text=message.text or "",
+        )
+        if correction is not None and correction.handled:
+            await session.commit()
+            await _send(chat_id=message.chat.id, text=correction.reply_text)
+            return {}
+
     # 5. Persist the log entry and extraction result; award XP
     facts: ExtractedFacts | None = None
     xp_result: XPResult | None = None
@@ -225,7 +238,15 @@ async def webhook(
             )
             session.add(ef)
             await session.flush()
-            xp_result = await award_xp(facts, message.from_.id, session)
+            progress = await recompute_progress_from_effective_state(session, message.from_.id)
+            if progress.xp_delta != 0 or progress.new_level != progress.old_level:
+                xp_result = XPResult(
+                    xp_gained=progress.xp_delta,
+                    new_total_xp=progress.new_total_xp,
+                    old_level=progress.old_level,
+                    new_level=progress.new_level,
+                    levelled_up=progress.new_level > progress.old_level,
+                )
             await asyncio.get_running_loop().run_in_executor(
                 None, store_facts, facts, message.text or "", message.from_.id
             )

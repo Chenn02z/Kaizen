@@ -37,6 +37,14 @@ async def db_session():
                 " END $$"
             )
         )
+        await session.execute(
+            text(
+                "DO $$ BEGIN"
+                " IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'habit_evidence_overrides')"
+                " THEN TRUNCATE TABLE habit_evidence_overrides RESTART IDENTITY CASCADE; END IF;"
+                " END $$"
+            )
+        )
         await session.commit()
         yield session
 
