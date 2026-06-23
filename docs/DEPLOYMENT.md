@@ -94,13 +94,13 @@ which is fine for early testing but weaker than persistent hosted memory.
 
 ## 4. Install Kaizen on EC2
 
-Clone the repo to `/opt/kaizen/habitbot` and run the bootstrap:
+Clone the repo to `/opt/kaizen/Kaizen` and run the bootstrap:
 
 ```bash
 sudo mkdir -p /opt/kaizen
 sudo chown -R ubuntu:ubuntu /opt/kaizen
-git clone <repo-url> /opt/kaizen/habitbot
-cd /opt/kaizen/habitbot
+git clone <repo-url> /opt/kaizen/Kaizen
+cd /opt/kaizen/Kaizen
 bash scripts/aws-ec2-bootstrap.sh
 ```
 
@@ -121,7 +121,7 @@ sudo systemctl restart kaizen
 ```
 
 The provided systemd unit assumes the default Ubuntu EC2 user and the repository
-path `/opt/kaizen/habitbot`. If you use a different user or path, update
+path `/opt/kaizen/Kaizen`. If you use a different user or path, update
 `deploy/aws/kaizen.service` before running the bootstrap.
 
 ## 5. Configure Nginx and TLS

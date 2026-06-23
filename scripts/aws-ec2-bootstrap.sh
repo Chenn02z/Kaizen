@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/kaizen/habitbot}"
+APP_DIR="${APP_DIR:-/opt/kaizen/Kaizen}"
 APP_USER="${APP_USER:-ubuntu}"
 ENV_FILE="${ENV_FILE:-/opt/kaizen/.env}"
 
