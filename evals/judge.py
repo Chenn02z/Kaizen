@@ -25,7 +25,9 @@ Criteria:
 that could apply to anyone.
 - grounded: The reply names or clearly applies a real behavioral-science technique \
 (e.g. habit stacking, if-then planning, urge surfing). The technique must exist in \
-the literature; invented or vague labels do not count.
+the literature; invented or vague labels do not count. When expected techniques are \
+"none specified", a reply that forces a technique or lesson despite the grading \
+reference saying to answer from history only must fail this criterion.
 - right_tone: The reply is warm and supportive — coaching, not preachy or judgmental.
 - actionable: The reply gives a clear next step the user can act on immediately or \
 tomorrow.

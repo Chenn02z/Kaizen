@@ -258,6 +258,58 @@ async def test_tick_prompt_uses_corrected_habit_state(db_session, monkeypatch) -
     assert "read: done corrected" in captured["content"]
 
 
+def test_proactive_lesson_query_uses_state_and_recent_pattern() -> None:
+    from app.agent.graph import build_proactive_lesson_query
+
+    query = build_proactive_lesson_query(
+        habit_state_summary="- gym: missing\n- read: done",
+        history="missed gym after late work twice this week",
+    )
+
+    assert query is not None
+    assert "gym: missing" in query
+    assert "missed gym after late work" in query
+    assert "behavior change habit" not in query
+
+
+async def test_tick_retrieves_lessons_from_concrete_state(db_session, monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    lesson = MagicMock()
+    lesson.content = (
+        "technique: implementation intentions\n"
+        "lesson: choose the exact prompt before the next workday starts."
+    )
+
+    async def _capture_retrieve(query: str, top_k: int = 5, top_n: int = 3):
+        captured["query"] = query
+        return [lesson]
+
+    async def _capture_complete(*args, **kwargs):
+        captured["content"] = kwargs["messages"][0]["content"]
+        return _make_decide_response(
+            action="respond",
+            reason="recent late-work gym drift fits implementation intentions",
+            technique="implementation intentions",
+            message="Use implementation intentions: after closing your laptop, change for gym.",
+        )
+
+    monkeypatch.setattr("app.agent.graph.complete", _capture_complete)
+    monkeypatch.setattr(
+        "app.agent.tools._recall_history",
+        lambda q, uid, limit=5: "missed gym after late work twice this week",
+    )
+    monkeypatch.setattr("app.agent.tools._retrieve", _capture_retrieve)
+    monkeypatch.setattr("app.agent.runner.send_message", AsyncMock())
+
+    await run_tick(USER_ID, now=_today_at(13))
+
+    assert "missed gym after late work" in captured["query"]
+    assert "behavior change habit" not in captured["query"]
+    assert "Relevant self-authored lessons" in captured["content"]
+    assert "implementation intentions" in captured["content"]
+
+
 # ---------------------------------------------------------------------------
 # AC4: /scheduler/tick endpoint rejects requests without the correct secret
 # ---------------------------------------------------------------------------

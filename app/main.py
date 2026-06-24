@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.runner import run_user_message
 from app.agent.scheduler import start_scheduler, stop_scheduler
+from app.agent.tools import tool_retrieve
 from app.config import settings
 from app.corrections.service import handle_correction_message
 from app.dashboard import DashboardData, get_dashboard_data
@@ -289,10 +290,41 @@ _REFLECTION_PATTERNS = [
     "when do i usually",
 ]
 
+_COACHING_REFLECTION_PATTERNS = [
+    "what should i change",
+    "what should i do",
+    "what can i change",
+    "what can i do",
+    "what should i try",
+    "what should i do differently",
+    "what do i change",
+    "what do i try",
+    "what to change",
+    "what to try",
+    "how do i stop",
+    "how can i stop",
+    "how should i stop",
+    "how do i avoid",
+    "how can i avoid",
+    "how should i avoid",
+    "change tomorrow",
+    "try tomorrow",
+    "do tomorrow",
+    "differently tomorrow",
+    "next time i",
+]
+
 
 def _is_reflection_query(text: str) -> bool:
     lower = text.lower()
-    return any(p.lower() in lower for p in _REFLECTION_PATTERNS)
+    return any(p.lower() in lower for p in _REFLECTION_PATTERNS) or _is_coaching_reflection_query(
+        text
+    )
+
+
+def _is_coaching_reflection_query(text: str) -> bool:
+    lower = text.lower()
+    return any(pattern in lower for pattern in _COACHING_REFLECTION_PATTERNS)
 
 
 def _is_dashboard_command(text: Optional[str]) -> bool:
@@ -318,17 +350,50 @@ async def _answer_reflection(query: str, telegram_user_id: int) -> str:
         else f"Recent relevant history:\n{history}"
     )
     context = context[:3000]  # hard cap to keep prompt size bounded
-    system = (
-        "You are Kaizen, a personal behavior-change coach. "
-        "Answer the user's reflection question using ONLY the provided history and patterns. "
-        "Be specific and cite actual entries. Be concise (3-5 sentences)."
-    )
+    coaching_reflection = _is_coaching_reflection_query(query)
+    lesson_context = ""
+    if coaching_reflection:
+        lesson_query = _build_lesson_query(query=query, history=history, patterns=patterns)
+        chunks = await tool_retrieve(lesson_query)
+        if chunks:
+            lessons = "\n\n---\n\n".join(c.content for c in chunks)
+            lesson_context = f"\n\nRetrieved self-authored lessons:\n{lessons[:2000]}"
+
+    if coaching_reflection:
+        system = (
+            "You are Kaizen, a personal behavior-change coach. "
+            "Answer action-oriented reflection questions history-first: use the provided "
+            "history and patterns as the reason for any advice. If a retrieved lesson fits "
+            "that actual history, name its technique, apply one lesson, and explain why it "
+            "fits this user's pattern. If no retrieved lesson fits, answer from history only "
+            "and do not force a technique. Be concise (3-5 sentences)."
+        )
+    else:
+        system = (
+            "You are Kaizen, a personal behavior-change coach. "
+            "Answer the user's descriptive reflection question using ONLY the provided "
+            "history and patterns. Do not introduce lessons or techniques unless the user "
+            "asks for a recommendation. Be specific and cite actual entries. Be concise "
+            "(3-5 sentences)."
+        )
     response = await complete(
         messages=[{"role": "user", "content": query}],
-        system=f"{system}\n\n{context}",
+        system=f"{system}\n\n{context}{lesson_context}",
         max_tokens=400,
     )
     return next(b.text for b in response.content if b.type == "text")
+
+
+def _build_lesson_query(*, query: str, history: str, patterns: str) -> str:
+    """Build a lesson retrieval query from a reflection question plus real history."""
+    history_part = history.strip()[:1200]
+    pattern_part = patterns.strip()[:800]
+    parts = [f"reflection question: {query.strip()}"]
+    if history_part:
+        parts.append(f"recent habit history: {history_part}")
+    if pattern_part:
+        parts.append(f"detected habit patterns: {pattern_part}")
+    return "\n".join(parts)
 
 
 async def _generate_reply(

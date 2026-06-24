@@ -12,6 +12,7 @@ class AgentState(TypedDict, total=False):
     # Intermediate results
     facts: Optional[Any]  # ExtractedFacts | None
     retrieved_chunks: list[Any]  # list[CorpusChunk]
+    lesson_query: Optional[str]
     history: str
     habit_state_summary: str
 

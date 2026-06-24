@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from evals.golden import GOLDEN_SET
+from evals.golden import GOLDEN_SET, LESSON_GROUNDING_SET
 
 CORPUS_DIR = Path(__file__).parents[2] / "corpus"
 
@@ -23,11 +23,27 @@ def test_golden_techniques_exist_in_corpus() -> None:
     """Every expected_technique stem must match a real corpus/*.md file."""
     existing_stems = {p.stem for p in CORPUS_DIR.glob("*.md")}
     missing: list[str] = []
-    for scenario in GOLDEN_SET:
+    for scenario in [*GOLDEN_SET, *LESSON_GROUNDING_SET]:
         for technique in scenario.expected_techniques:
             if technique not in existing_stems:
-                missing.append(f"{technique!r} (log: {scenario.log[:40]!r})")
+                prompt = getattr(scenario, "log", getattr(scenario, "prompt", ""))
+                missing.append(f"{technique!r} (prompt: {prompt[:40]!r})")
     assert not missing, "Techniques not in corpus:\n" + "\n".join(missing)
+
+
+def test_lesson_grounding_scenarios_cover_milestone_modes() -> None:
+    modes = {scenario.mode for scenario in LESSON_GROUNDING_SET}
+
+    assert {
+        "descriptive_reflection",
+        "coaching_reflection",
+        "abstain",
+        "proactive",
+    } <= modes
+    assert any(
+        not scenario.expected_techniques and "forcing a lesson" in scenario.ideal_notes.lower()
+        for scenario in LESSON_GROUNDING_SET
+    )
 
 
 # ---------------------------------------------------------------------------
