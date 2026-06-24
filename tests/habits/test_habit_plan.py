@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 
+from app.corrections.service import handle_correction_message
 from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log
 from app.db.session import AsyncSessionLocal
+from app.habits.evidence import build_effective_evidence_ledger
 from app.habits.plan import due_habits_missing_evidence, get_habit_plan_context
 
 USER_ID = 12345
@@ -26,7 +28,7 @@ async def test_default_habit_plan_is_seeded(db_session) -> None:
 
 
 async def test_due_habits_use_cadence_and_today_evidence(db_session) -> None:
-    now = datetime(2026, 6, 15, 21, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 6, 15, 13, 0, tzinfo=timezone.utc)
     async with AsyncSessionLocal() as session:
         await get_habit_plan_context(session, USER_ID)
         log = Log(
@@ -53,8 +55,105 @@ async def test_due_habits_use_cadence_and_today_evidence(db_session) -> None:
     assert "read" in names
 
 
+async def test_effective_evidence_uses_app_local_log_date(db_session) -> None:
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        log = Log(
+            telegram_user_id=USER_ID,
+            text="did leetcode after work",
+            created_at=datetime(2026, 6, 23, 17, 42, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=["leetcode"],
+                adherence="yes",
+            )
+        )
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        ledger = await build_effective_evidence_ledger(
+            session,
+            USER_ID,
+            start_date=datetime(2026, 6, 24, tzinfo=timezone.utc).date(),
+            end_date=datetime(2026, 6, 24, tzinfo=timezone.utc).date(),
+        )
+
+    assert "leetcode" in ledger.states_by_date[datetime(2026, 6, 24).date()]
+
+
+async def test_due_habits_use_app_local_log_date(db_session) -> None:
+    now = datetime(2026, 6, 24, 13, 0, tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        log = Log(
+            telegram_user_id=USER_ID,
+            text="did leetcode after work",
+            created_at=datetime(2026, 6, 23, 17, 42, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=["leetcode"],
+                adherence="yes",
+            )
+        )
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        due = await due_habits_missing_evidence(session, USER_ID, now)
+
+    names = {habit.habit_name for habit in due}
+    assert "leetcode" not in names
+
+
+async def test_corrections_target_app_local_log_date(db_session) -> None:
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        log = Log(
+            telegram_user_id=USER_ID,
+            text="worked on a hard problem",
+            created_at=datetime(2026, 6, 23, 17, 42, tzinfo=timezone.utc),
+        )
+        session.add(log)
+        await session.flush()
+        session.add(
+            ExtractedFacts(
+                log_id=log.id,
+                habits=[],
+                adherence=None,
+            )
+        )
+
+        outcome = await handle_correction_message(
+            session,
+            telegram_user_id=USER_ID,
+            text="count that as leetcode",
+            now=datetime(2026, 6, 24, 1, 0, tzinfo=timezone.utc),
+        )
+        await session.commit()
+
+    assert outcome is not None
+    assert outcome.applied is True
+
+    async with AsyncSessionLocal() as session:
+        ledger = await build_effective_evidence_ledger(
+            session,
+            USER_ID,
+            start_date=datetime(2026, 6, 24).date(),
+            end_date=datetime(2026, 6, 24).date(),
+        )
+
+    assert "leetcode" in ledger.states_by_date[datetime(2026, 6, 24).date()]
+
+
 async def test_due_habits_respect_positive_override(db_session) -> None:
-    now = datetime(2026, 6, 15, 21, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 6, 15, 13, 0, tzinfo=timezone.utc)
     async with AsyncSessionLocal() as session:
         await get_habit_plan_context(session, USER_ID)
         session.add(
@@ -78,7 +177,7 @@ async def test_due_habits_respect_positive_override(db_session) -> None:
 
 
 async def test_due_habits_respect_negative_override(db_session) -> None:
-    now = datetime(2026, 6, 15, 21, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 6, 15, 13, 0, tzinfo=timezone.utc)
     async with AsyncSessionLocal() as session:
         await get_habit_plan_context(session, USER_ID)
         log = Log(

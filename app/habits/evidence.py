@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_app_timezone
 from app.corrections.schema import OverrideStatus
 from app.db.models import (
     ExtractedFacts,
@@ -90,7 +91,7 @@ async def build_effective_evidence_ledger(
     logs: list[EffectiveLogEvidence] = []
 
     for log, facts in log_rows:
-        target_date = log.created_at.date()
+        target_date = _app_date(log.created_at)
         base_habits = list((facts.habits if facts else []) or [])
         candidate_habits = set(base_habits)
         candidate_habits.update(
@@ -344,4 +345,10 @@ def _has_three_day_streak(positive_days: set[date], target_day: date) -> bool:
 
 
 def _day_start(day: date) -> datetime:
-    return datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
+    return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
+
+
+def _app_date(value: datetime) -> date:
+    if value.tzinfo is None:
+        return value.date()
+    return value.astimezone(get_app_timezone()).date()

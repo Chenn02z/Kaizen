@@ -115,7 +115,7 @@ async def run_tick(telegram_user_id: int, now: datetime | None = None) -> None:
 
             due_habits = await due_habits_missing_evidence(session, telegram_user_id, now)
             if due_habits and not await has_fallback_checkin_today(
-                session, telegram_user_id, today=(now.date() if now else None)
+                session, telegram_user_id, today=today
             ):
                 checkin_text = build_fallback_checkin_message(due_habits)
                 session.add(
@@ -205,6 +205,8 @@ async def _build_habit_state_summary(
     now: datetime | None,
 ) -> str:
     current = now or datetime.now(get_app_timezone())
+    if current.tzinfo is not None:
+        current = current.astimezone(get_app_timezone())
     plans = await get_habit_plan_context(session, telegram_user_id)
     ledger = await build_effective_evidence_ledger(
         session,

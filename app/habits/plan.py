@@ -1,10 +1,11 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from typing import Any, Sequence
 
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_app_timezone
 from app.db.models import HabitCategory, HabitPlan, Intervention
 from app.habits.evidence import build_effective_evidence_ledger, is_positive_status
 
@@ -186,7 +187,7 @@ async def due_habits_missing_evidence(
     telegram_user_id: int,
     now: datetime | None = None,
 ) -> list[DueHabit]:
-    current = now or datetime.now(timezone.utc)
+    current = _app_datetime(now)
     if not _fallback_window_has_arrived(current):
         return []
 
@@ -226,7 +227,7 @@ async def has_fallback_checkin_today(
     telegram_user_id: int,
     today: date | None = None,
 ) -> bool:
-    target = today or datetime.now(timezone.utc).date()
+    target = today or datetime.now(get_app_timezone()).date()
     result = await session.execute(
         select(Intervention.id)
         .where(Intervention.telegram_user_id == telegram_user_id)
@@ -248,7 +249,7 @@ def build_fallback_checkin_message(due_habits: Sequence[DueHabit]) -> str:
 
 
 def _fallback_window_has_arrived(current: datetime) -> bool:
-    return current.time() >= _parse_window(_DEFAULT_WINDOW)
+    return _app_datetime(current).time() >= _parse_window(_DEFAULT_WINDOW)
 
 
 def _parse_window(value: str | None) -> time:
@@ -288,11 +289,19 @@ def habit_due_today(plan: HabitPlanContext, today: date, weekly_completed: int) 
 
 
 def _day_start(day: date) -> datetime:
-    return datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
+    return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
 
 
 def _week_start(day: date) -> date:
     return day - timedelta(days=day.weekday())
+
+
+def _app_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(get_app_timezone())
+    if value.tzinfo is None:
+        return value.replace(tzinfo=get_app_timezone())
+    return value.astimezone(get_app_timezone())
 
 
 def _weekly_positive_counts(states_by_date: dict[date, dict[str, Any]]) -> dict[str, int]:

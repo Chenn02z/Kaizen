@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_app_timezone
 from app.db.models import (
     ExtractedFacts,
     HabitCategory,
@@ -250,4 +251,4 @@ def _parse_window(value: str | None) -> time:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(get_app_timezone())

@@ -1,9 +1,10 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_app_timezone
 from app.corrections.parser import parse_correction_intent
 from app.corrections.schema import CorrectionIntent, CorrectionReference, OverrideStatus
 from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log
@@ -31,7 +32,9 @@ async def handle_correction_message(
     if intent is None:
         return None
 
-    resolution = await _resolve_target(session, telegram_user_id, intent, plans, now or utcnow())
+    resolution = await _resolve_target(
+        session, telegram_user_id, intent, plans, _app_datetime(now)
+    )
     if resolution.follow_up is not None:
         return CorrectionOutcome(handled=True, applied=False, reply_text=resolution.follow_up)
 
@@ -109,12 +112,12 @@ async def _resolve_target(
             options = ", ".join(plan.habit_name for plan in plans)
             return _Resolution(
                 habit_name="",
-                target_date=now.date(),
+                target_date=_app_date(now),
                 follow_up=f"I couldn't match that habit. Say the habit name directly: {options}.",
             )
         return _Resolution(
             habit_name="",
-            target_date=now.date(),
+            target_date=_app_date(now),
             follow_up=(
                 "Which habit should I correct? "
                 "Say something like 'count my last log as partial for gym'."
@@ -122,12 +125,12 @@ async def _resolve_target(
         )
 
     if intent.reference == CorrectionReference.today:
-        return _Resolution(habit_name=habit_name, target_date=now.date())
+        return _Resolution(habit_name=habit_name, target_date=_app_date(now))
 
     if recent is None:
         return _Resolution(
             habit_name="",
-            target_date=now.date(),
+            target_date=_app_date(now),
             follow_up=(
                 "I couldn't find a recent log to correct yet. "
                 "Send the log first, then correct it."
@@ -136,7 +139,7 @@ async def _resolve_target(
 
     return _Resolution(
         habit_name=habit_name,
-        target_date=recent.created_at.date(),
+        target_date=_app_date(recent.created_at),
         log_id=recent.id,
     )
 
@@ -207,4 +210,16 @@ def _build_confirmation(
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(get_app_timezone())
+
+
+def _app_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(get_app_timezone())
+    if value.tzinfo is None:
+        return value.replace(tzinfo=get_app_timezone())
+    return value.astimezone(get_app_timezone())
+
+
+def _app_date(value: datetime) -> date:
+    return _app_datetime(value).date()

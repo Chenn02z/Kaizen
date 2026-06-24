@@ -1,6 +1,6 @@
 """Tests for the proactive agent — milestone 6 acceptance criteria."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.agent.runner import run_tick
+from app.config import get_app_timezone
 from app.db.models import HabitEvidenceOverride, Intervention
 from app.db.session import AsyncSessionLocal
 from app.main import app
@@ -16,7 +17,7 @@ USER_ID = 12345
 
 
 def _today_at(hour: int) -> datetime:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(get_app_timezone())
     return now.replace(hour=hour, minute=0, second=0, microsecond=0)
 
 
