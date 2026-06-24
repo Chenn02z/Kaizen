@@ -23,7 +23,7 @@ from app.telegram.client import send_message
 
 logger = logging.getLogger(__name__)
 
-_DAILY_CAP = 1
+_DAILY_CAP = 4
 
 
 def _app_day_bounds(now: datetime | None) -> tuple[date, datetime, datetime]:

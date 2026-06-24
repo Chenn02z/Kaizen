@@ -179,23 +179,24 @@ async def test_tick_due_habit_sends_one_fallback_checkin(db_session, monkeypatch
 
 
 # ---------------------------------------------------------------------------
-# AC3: daily cap — second tick is blocked without calling LLM
+# AC3: daily cap — fifth tick is blocked without calling LLM
 # ---------------------------------------------------------------------------
 
 
-async def test_daily_cap_blocks_second_tick(db_session, monkeypatch) -> None:
-    """Pre-insert a proactive row; a second tick must write silence without hitting the LLM."""
-    # Pre-seed a proactive intervention for today
+async def test_daily_cap_blocks_fifth_tick(db_session, monkeypatch) -> None:
+    """Pre-insert four proactive rows; a fifth tick must write silence without hitting the LLM."""
+    # Pre-seed four proactive interventions for today
     async with AsyncSessionLocal() as session:
-        session.add(
-            Intervention(
-                telegram_user_id=USER_ID,
-                kind="proactive",
-                reason="sent earlier today",
-                technique="habit stacking",
-                message="Stack your workout with your morning coffee.",
+        for _ in range(4):
+            session.add(
+                Intervention(
+                    telegram_user_id=USER_ID,
+                    kind="proactive",
+                    reason="sent earlier today",
+                    technique="habit stacking",
+                    message="Stack your workout with your morning coffee.",
+                )
             )
-        )
         await session.commit()
 
     mock_complete = AsyncMock()
