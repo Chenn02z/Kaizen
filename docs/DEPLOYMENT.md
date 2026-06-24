@@ -124,6 +124,40 @@ The provided systemd unit assumes the default Ubuntu EC2 user and the repository
 path `/opt/kaizen/Kaizen`. If you use a different user or path, update
 `deploy/aws/kaizen.service` before running the bootstrap.
 
+## 4b. Deploying After a Push
+
+After you push backend or product changes to production, deploy from the Ubuntu
+host with the same environment file the service uses:
+
+```bash
+cd /opt/kaizen/Kaizen
+set -a
+source /opt/kaizen/.env
+set +a
+git pull
+uv run alembic upgrade head
+sudo systemctl restart kaizen
+```
+
+If the change includes Mini App frontend work, rebuild the webapp first:
+
+```bash
+cd /opt/kaizen/Kaizen/webapp
+npm install
+npm run build
+cd ..
+sudo systemctl restart kaizen
+```
+
+Notes:
+
+- `uv run alembic upgrade head` needs the production env vars because
+  `alembic/env.py` imports `app.config.settings` at startup.
+- Keep `/opt/kaizen/.env` in sync with production secrets; the systemd service
+  reads that file at runtime.
+- Restart only one Kaizen instance. The scheduler runs inside the web process,
+  so multiple live copies would create duplicate tickers.
+
 ## 5. Configure Nginx and TLS
 
 On EC2, copy the Nginx example and replace `kaizen.example.com` with your real
