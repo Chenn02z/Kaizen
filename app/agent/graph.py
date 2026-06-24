@@ -34,12 +34,15 @@ _DECIDE_TOOL: dict = {
 
 _DECIDE_SYSTEM = (
     "You are Kaizen, a proactive behavior-change coach. "
-    "You receive the user's recent behavioral history and relevant techniques. "
+    "You receive the user's current habit state, recent behavioral history, and "
+    "self-authored lessons mapped to techniques. "
     "Your job is to decide: does the user need a nudge RIGHT NOW, or are they on track? "
     "Choose 'silent' if the user is doing well, has already logged today, or if you have "
-    "nothing grounded and specific to say. "
+    "nothing grounded and specific to say. Do not send generic educational content. "
     "Choose 'respond' only if you see a clear pattern of drift that a specific technique "
-    "can address. When responding, name the technique and write a concise message (2-3 sentences). "
+    "and one retrieved lesson can address. If the retrieved lessons do not fit the "
+    "current state, choose 'silent'. When responding, name the technique, apply the "
+    "lesson to the user's recent pattern, and write a concise message (2-3 sentences). "
     "Use the decide_intervention tool to record your decision."
 )
 
@@ -104,21 +107,42 @@ async def recall(state: AgentState) -> AgentState:
     return {**state, "history": history}
 
 
+async def retrieve_proactive_lessons(state: AgentState) -> AgentState:
+    """Tick path: retrieve lessons from concrete habit state and recent history."""
+    habit_state_summary = state.get("habit_state_summary") or ""
+    history = state.get("history") or ""
+    query = build_proactive_lesson_query(
+        habit_state_summary=habit_state_summary,
+        history=history,
+    )
+    if query is None:
+        return {**state, "retrieved_chunks": [], "lesson_query": None}
+
+    try:
+        chunks = await tool_retrieve(query)
+    except Exception:
+        logger.exception("retrieve_proactive_lessons node failed")
+        chunks = []
+    return {**state, "retrieved_chunks": chunks, "lesson_query": query}
+
+
 async def decide(state: AgentState) -> AgentState:
     """Tick path: call the LLM to decide whether to send a proactive nudge."""
     history = state.get("history") or ""
     habit_state_summary = state.get("habit_state_summary") or ""
+    lesson_query = state.get("lesson_query") or ""
     chunks = state.get("retrieved_chunks") or []
-    techniques_text = "\n\n---\n\n".join(c.content for c in chunks)
+    lessons_text = "\n\n---\n\n".join(c.content for c in chunks)
 
     # Bound the context sent to the model
     history_section = history[:2000]
-    techniques_section = techniques_text[:2000]
+    lessons_section = lessons_text[:2000]
 
     context = (
         f"Today's effective habit state:\n{habit_state_summary[:1000]}\n\n"
         f"User's recent behavioral history:\n{history_section}\n\n"
-        f"Relevant behavioral-science techniques:\n{techniques_section}"
+        f"Lesson retrieval query:\n{lesson_query[:1000] or 'No concrete lesson query built.'}\n\n"
+        f"Relevant self-authored lessons:\n{lessons_section or 'No lesson retrieved.'}"
     )
 
     try:
@@ -191,8 +215,40 @@ def _after_classify(state: AgentState) -> str:
 
 def _after_recall(state: AgentState) -> str:
     if state.get("event_kind") == "tick":
-        return "decide"
+        return "retrieve_proactive_lessons"
     return "respond"
+
+
+def build_proactive_lesson_query(
+    *,
+    habit_state_summary: str,
+    history: str,
+) -> str | None:
+    """Build a non-generic lesson query from due/drifting habit state."""
+    habit_lines = [
+        line.strip().removeprefix("- ").strip()
+        for line in habit_state_summary.splitlines()
+        if line.strip().startswith("- ")
+    ]
+    missing_lines = [line for line in habit_lines if ": missing" in line]
+    history_text = history.strip()
+    drift_words = ("miss", "missed", "skip", "skipped", "partial", "drift", "slip", "late")
+    has_recent_drift = any(word in history_text.lower() for word in drift_words)
+
+    if not missing_lines and not has_recent_drift:
+        return None
+
+    selected_habits = missing_lines or habit_lines
+    if not selected_habits:
+        return None
+
+    parts = [
+        "proactive nudge lesson query",
+        "habit state: " + "; ".join(selected_habits[:6]),
+    ]
+    if history_text:
+        parts.append(f"recent pattern: {history_text[:1200]}")
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +266,7 @@ def build_graph():  # type: ignore[return]
     g.add_node("extract_facts", extract_facts)
     g.add_node("retrieve_techniques", retrieve_techniques)
     g.add_node("recall", recall)
+    g.add_node("retrieve_proactive_lessons", retrieve_proactive_lessons)
     g.add_node("decide", decide)
     g.add_node("respond", respond)
 
@@ -225,8 +282,12 @@ def build_graph():  # type: ignore[return]
     g.add_conditional_edges(
         "recall",
         _after_recall,
-        {"decide": "decide", "respond": "respond"},
+        {
+            "retrieve_proactive_lessons": "retrieve_proactive_lessons",
+            "respond": "respond",
+        },
     )
+    g.add_edge("retrieve_proactive_lessons", "decide")
     g.add_edge("decide", END)
     g.add_edge("respond", END)
 

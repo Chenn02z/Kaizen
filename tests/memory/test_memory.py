@@ -110,3 +110,66 @@ async def test_answer_reflection_system_prompt_bounded(monkeypatch):
     assert captured_kwargs.get("system") is not None
     # system prompt = fixed prefix (~200 chars) + context capped at 3000 chars
     assert len(captured_kwargs["system"]) < 3500
+
+
+@pytest.mark.asyncio
+async def test_descriptive_reflection_does_not_retrieve_lessons(monkeypatch):
+    fake_block = MagicMock()
+    fake_block.type = "text"
+    fake_block.text = "You usually skip gym after stressful work days."
+    fake_response = MagicMock()
+    fake_response.content = [fake_block]
+    mock_retrieve = AsyncMock()
+
+    with (
+        patch("app.main.recall_history", return_value="skipped gym after stressful work"),
+        patch("app.main.detect_patterns", return_value="gym slips after work stress"),
+        patch("app.main.tool_retrieve", mock_retrieve),
+        patch("app.main.complete", new=AsyncMock(return_value=fake_response)),
+    ):
+        from app.main import _answer_reflection
+
+        reply = await _answer_reflection("when do I usually skip gym?", USER_ID)
+
+    assert "skip gym" in reply
+    mock_retrieve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_coaching_reflection_retrieves_lessons_after_history(monkeypatch):
+    captured: dict[str, str] = {}
+
+    fake_block = MagicMock()
+    fake_block.type = "text"
+    fake_block.text = "Use implementation intentions after late work nights."
+    fake_response = MagicMock()
+    fake_response.content = [fake_block]
+
+    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+        captured["system"] = system or ""
+        return fake_response
+
+    lesson = MagicMock()
+    lesson.content = (
+        "technique: implementation intentions\n"
+        "lesson: pick the prompt before tomorrow's mood arrives."
+    )
+    mock_retrieve = AsyncMock(return_value=[lesson])
+
+    with (
+        patch("app.main.recall_history", return_value="missed gym after late work twice"),
+        patch("app.main.detect_patterns", return_value="late work is the gym trigger"),
+        patch("app.main.tool_retrieve", mock_retrieve),
+        patch("app.main.complete", new=fake_complete),
+    ):
+        from app.main import _answer_reflection
+
+        reply = await _answer_reflection("what should I change tomorrow?", USER_ID)
+
+    query = mock_retrieve.await_args.args[0]
+    assert "what should I change tomorrow" in query
+    assert "missed gym after late work" in query
+    assert "late work is the gym trigger" in query
+    assert "Retrieved self-authored lessons" in captured["system"]
+    assert "implementation intentions" in captured["system"]
+    assert "implementation intentions" in reply

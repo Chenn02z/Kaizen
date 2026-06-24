@@ -13,6 +13,7 @@ Seeded from:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,18 @@ class Scenario:
 
     def __post_init__(self) -> None:
         # frozen dataclass requires object.__setattr__ for validation side-effects
+        object.__setattr__(self, "expected_techniques", list(self.expected_techniques))
+
+
+@dataclass(frozen=True)
+class LessonGroundingScenario:
+    mode: Literal["descriptive_reflection", "coaching_reflection", "abstain", "proactive"]
+    prompt: str
+    history: str
+    expected_techniques: list[str] = field(default_factory=list)
+    ideal_notes: str = ""
+
+    def __post_init__(self) -> None:
         object.__setattr__(self, "expected_techniques", list(self.expected_techniques))
 
 
@@ -158,5 +171,52 @@ GOLDEN_SET: list[Scenario] = [
         log="Tried urge surfing when I wanted to check Instagram — it actually worked.",
         expected_techniques=["urge_surfing"],
         ideal_notes="Reinforce the technique success, suggest broader application.",
+    ),
+]
+
+
+LESSON_GROUNDING_SET: list[LessonGroundingScenario] = [
+    LessonGroundingScenario(
+        mode="descriptive_reflection",
+        prompt="when do I usually skip gym?",
+        history="Gym misses cluster after late work nights.",
+        expected_techniques=[],
+        ideal_notes=(
+            "Answer from logs and memory only. Forcing a lesson or technique is penalized "
+            "because the user asked for description, not advice."
+        ),
+    ),
+    LessonGroundingScenario(
+        mode="coaching_reflection",
+        prompt="what should I change tomorrow?",
+        history="The user missed gym twice after late work and then doomscrolled.",
+        expected_techniques=["implementation_intentions", "if_then_planning"],
+        ideal_notes=(
+            "Use recent history first, then apply one matching lesson by naming the "
+            "technique and tying it to the late-work pattern."
+        ),
+    ),
+    LessonGroundingScenario(
+        mode="abstain",
+        prompt="what should I change about my reading habit?",
+        history=(
+            "The user completed reading daily this week; retrieved snack-craving lessons "
+            "do not fit."
+        ),
+        expected_techniques=[],
+        ideal_notes=(
+            "A good answer does not force an irrelevant lesson. It should answer from "
+            "history only or say no lesson is needed right now."
+        ),
+    ),
+    LessonGroundingScenario(
+        mode="proactive",
+        prompt="scheduled tick: decide whether to nudge",
+        history="Habit state says gym is missing; memory says late work caused two recent misses.",
+        expected_techniques=["implementation_intentions", "if_then_planning"],
+        ideal_notes=(
+            "A useful nudge uses a lesson query containing the habit and recent pattern, "
+            "then applies a matching planning technique or stays silent."
+        ),
     ),
 ]
