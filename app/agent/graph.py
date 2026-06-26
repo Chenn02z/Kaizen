@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.agent.state import AgentState
 from app.agent.tools import tool_extract, tool_recall, tool_retrieve
 from app.llm.client import complete
+from app.rag.replies import compose_log_reply
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +46,6 @@ _DECIDE_SYSTEM = (
     "lesson to the user's recent pattern, and write a concise message (2-3 sentences). "
     "Use the decide_intervention tool to record your decision."
 )
-
-_REPLY_SYSTEM = (
-    "You are Kaizen, a personal behavior-change coach. "
-    "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
-    "Name the technique you are applying. Be concise (2-4 sentences). "
-    "If the user's history shows a pattern relevant to this log, reference it."
-)
-
 
 # ---------------------------------------------------------------------------
 # Node functions
@@ -181,20 +174,13 @@ async def respond(state: AgentState) -> AgentState:
     history = state.get("history") or ""
     user_text = state.get("user_text") or ""
 
-    if not chunks:
-        return {**state, "reply_text": user_text, "decision": "respond"}
-
-    context = "\n\n---\n\n".join(c.content for c in chunks)
-    history_section = f"\n\nUser's recent history:\n{history[:1500]}" if history else ""
-    system = f"{_REPLY_SYSTEM}\n\nTechniques available:\n\n{context}{history_section}"
-
     try:
-        response = await complete(
-            messages=[{"role": "user", "content": user_text}],
-            system=system,
-            max_tokens=300,
+        reply = await compose_log_reply(
+            log_text=user_text,
+            facts=state.get("facts"),
+            chunks=chunks,
+            history=history,
         )
-        reply = next((b.text for b in response.content if b.type == "text"), user_text)
     except Exception:
         logger.exception("respond node failed")
         reply = user_text

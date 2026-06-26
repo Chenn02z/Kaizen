@@ -164,7 +164,7 @@ async def test_reflection_query_uses_reflection_path(
 
     mock_reflection = AsyncMock(return_value="You usually slip after stressful work days.")
     mock_agent = AsyncMock(return_value="agent reply")
-    monkeypatch.setattr("app.telegram.intake._answer_reflection", mock_reflection)
+    monkeypatch.setattr("app.telegram.intake.answer_reflection", mock_reflection)
     monkeypatch.setattr("app.telegram.intake.run_user_message", mock_agent)
 
     try:

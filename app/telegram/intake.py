@@ -7,7 +7,6 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.runner import run_user_message
-from app.agent.tools import tool_retrieve
 from app.checkins.service import handle_checkin_answer
 from app.corrections.service import handle_correction_message
 from app.db.models import ExtractedFacts as ExtractedFactsModel
@@ -18,9 +17,8 @@ from app.extract.schema import ExtractedFacts
 from app.gamification.xp import XPResult
 from app.habits.evidence import recompute_progress_from_effective_state
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
-from app.llm.client import complete
-from app.memory.recall import detect_patterns, recall_history
 from app.memory.store import store_facts
+from app.rag.replies import answer_reflection, is_reflection_query
 from app.telegram.webapp import dashboard_inline_keyboard
 
 logger = logging.getLogger(__name__)
@@ -198,8 +196,8 @@ async def _handle_log_message(message: TelegramIntakeMessage) -> IntakeOutcome:
 
     reply_text = message.text
     try:
-        if _is_reflection_query(message.text):
-            reply_text = await _answer_reflection(message.text, message.telegram_user_id)
+        if is_reflection_query(message.text):
+            reply_text = await answer_reflection(message.text, message.telegram_user_id)
         else:
             reply_text = await run_user_message(
                 telegram_user_id=message.telegram_user_id,
@@ -256,131 +254,3 @@ def _format_cadence(plan: HabitPlanContext) -> str:
         values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
         return ", ".join(str(day) for day in values) if values else "specific weekdays"
     return plan.cadence_type
-
-
-_REFLECTION_PATTERNS = [
-    "how was my week",
-    "when do i",
-    "how am i doing",
-    "my patterns",
-    "do i usually",
-    "when do i slip",
-    "when do i usually",
-]
-
-_COACHING_REFLECTION_PATTERNS = [
-    "what should i change",
-    "what should i do",
-    "what can i change",
-    "what can i do",
-    "what should i try",
-    "what should i do differently",
-    "what do i change",
-    "what do i try",
-    "what to change",
-    "what to try",
-    "how do i stop",
-    "how can i stop",
-    "how should i stop",
-    "how do i avoid",
-    "how can i avoid",
-    "how should i avoid",
-    "change tomorrow",
-    "try tomorrow",
-    "do tomorrow",
-    "differently tomorrow",
-    "next time i",
-]
-
-
-def _is_reflection_query(text: str) -> bool:
-    lower = text.lower()
-    return any(p.lower() in lower for p in _REFLECTION_PATTERNS) or _is_coaching_reflection_query(
-        text
-    )
-
-
-def _is_coaching_reflection_query(text: str) -> bool:
-    lower = text.lower()
-    return any(pattern in lower for pattern in _COACHING_REFLECTION_PATTERNS)
-
-
-async def _answer_reflection(query: str, telegram_user_id: int) -> str:
-    history = await asyncio.get_running_loop().run_in_executor(
-        None, recall_history, query, telegram_user_id
-    )
-    patterns = await asyncio.get_running_loop().run_in_executor(
-        None, detect_patterns, telegram_user_id
-    )
-    if not history and not patterns:
-        return "I don't have enough history yet — keep logging and I'll start surfacing patterns!"
-    context = (
-        f"Recent relevant history:\n{history}\n\nAll patterns:\n{patterns}"
-        if patterns
-        else f"Recent relevant history:\n{history}"
-    )
-    context = context[:3000]
-    coaching_reflection = _is_coaching_reflection_query(query)
-    lesson_context = ""
-    if coaching_reflection:
-        lesson_query = _build_lesson_query(query=query, history=history, patterns=patterns)
-        chunks = await tool_retrieve(lesson_query)
-        if chunks:
-            lessons = "\n\n---\n\n".join(c.content for c in chunks)
-            lesson_context = f"\n\nRetrieved self-authored lessons:\n{lessons[:2000]}"
-
-    if coaching_reflection:
-        system = (
-            "You are Kaizen, a personal behavior-change coach. "
-            "Answer action-oriented reflection questions history-first: use the provided "
-            "history and patterns as the reason for any advice. If a retrieved lesson fits "
-            "that actual history, name its technique, apply one lesson, and explain why it "
-            "fits this user's pattern. If no retrieved lesson fits, answer from history only "
-            "and do not force a technique. Be concise (3-5 sentences)."
-        )
-    else:
-        system = (
-            "You are Kaizen, a personal behavior-change coach. "
-            "Answer the user's descriptive reflection question using ONLY the provided "
-            "history and patterns. Do not introduce lessons or techniques unless the user "
-            "asks for a recommendation. Be specific and cite actual entries. Be concise "
-            "(3-5 sentences)."
-        )
-    response = await complete(
-        messages=[{"role": "user", "content": query}],
-        system=f"{system}\n\n{context}{lesson_context}",
-        max_tokens=400,
-    )
-    return next(b.text for b in response.content if b.type == "text")
-
-
-def _build_lesson_query(*, query: str, history: str, patterns: str) -> str:
-    """Build a lesson retrieval query from a reflection question plus real history."""
-    history_part = history.strip()[:1200]
-    pattern_part = patterns.strip()[:800]
-    parts = [f"reflection question: {query.strip()}"]
-    if history_part:
-        parts.append(f"recent habit history: {history_part}")
-    if pattern_part:
-        parts.append(f"detected habit patterns: {pattern_part}")
-    return "\n".join(parts)
-
-
-async def _generate_reply(
-    log_text: str, facts: ExtractedFacts | None, chunks: list, history: str = ""
-) -> str:
-    context = "\n\n---\n\n".join(c.content for c in chunks)
-    history_section = f"\n\nUser's recent history:\n{history}" if history else ""
-    system = (
-        "You are Kaizen, a personal behavior-change coach. "
-        "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
-        "Name the technique you are applying. Be concise (2-4 sentences). "
-        "If the user's history shows a pattern relevant to this log, reference it. "
-        f"Techniques available:\n\n{context}{history_section}"
-    )
-    response = await complete(
-        messages=[{"role": "user", "content": log_text}],
-        system=system,
-        max_tokens=300,
-    )
-    return next(b.text for b in response.content if b.type == "text")

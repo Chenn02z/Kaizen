@@ -49,18 +49,18 @@ async def test_answer_reflection_uses_planted_pattern(monkeypatch):
 
     with (
         patch(
-            "app.telegram.intake.recall_history",
+            "app.rag.replies.recall_history",
             return_value="skipped exercise, trigger: work stress",
         ),
         patch(
-            "app.telegram.intake.detect_patterns",
+            "app.rag.replies.detect_patterns",
             return_value="skipped exercise, trigger: work stress",
         ),
-        patch("app.telegram.intake.complete", new=AsyncMock(return_value=fake_response)),
+        patch("app.rag.replies.complete", new=AsyncMock(return_value=fake_response)),
     ):
-        from app.telegram.intake import _answer_reflection
+        from app.rag.replies import answer_reflection
 
-        reply = await _answer_reflection("when do I usually slip?", USER_ID)
+        reply = await answer_reflection("when do I usually slip?", USER_ID)
 
     assert "work stress" in reply
 
@@ -105,17 +105,31 @@ async def test_answer_reflection_system_prompt_bounded(monkeypatch):
     patterns_lines = "\n".join([f"pattern {i}: " + "y" * 100 for i in range(20)])
 
     with (
-        patch("app.telegram.intake.recall_history", return_value=history_lines),
-        patch("app.telegram.intake.detect_patterns", return_value=patterns_lines),
-        patch("app.telegram.intake.complete", new=fake_complete),
+        patch("app.rag.replies.recall_history", return_value=history_lines),
+        patch("app.rag.replies.detect_patterns", return_value=patterns_lines),
+        patch("app.rag.replies.complete", new=fake_complete),
     ):
-        from app.telegram.intake import _answer_reflection
+        from app.rag.replies import answer_reflection
 
-        await _answer_reflection("how was my week?", USER_ID)
+        await answer_reflection("how was my week?", USER_ID)
 
     assert captured_kwargs.get("system") is not None
     # system prompt = fixed prefix (~200 chars) + context capped at 3000 chars
     assert len(captured_kwargs["system"]) < 3500
+
+
+@pytest.mark.asyncio
+async def test_answer_reflection_no_history_returns_keep_logging_message() -> None:
+    from app.rag.replies import answer_reflection_from_history
+
+    reply = await answer_reflection_from_history(
+        query="how was my week?",
+        history="",
+        patterns="",
+    )
+
+    assert "don't have enough history yet" in reply
+    assert "keep logging" in reply
 
 
 @pytest.mark.asyncio
@@ -129,16 +143,16 @@ async def test_descriptive_reflection_does_not_retrieve_lessons(monkeypatch):
 
     with (
         patch(
-            "app.telegram.intake.recall_history",
+            "app.rag.replies.recall_history",
             return_value="skipped gym after stressful work",
         ),
-        patch("app.telegram.intake.detect_patterns", return_value="gym slips after work stress"),
-        patch("app.telegram.intake.tool_retrieve", mock_retrieve),
-        patch("app.telegram.intake.complete", new=AsyncMock(return_value=fake_response)),
+        patch("app.rag.replies.detect_patterns", return_value="gym slips after work stress"),
+        patch("app.rag.replies.retrieve", mock_retrieve),
+        patch("app.rag.replies.complete", new=AsyncMock(return_value=fake_response)),
     ):
-        from app.telegram.intake import _answer_reflection
+        from app.rag.replies import answer_reflection
 
-        reply = await _answer_reflection("when do I usually skip gym?", USER_ID)
+        reply = await answer_reflection("when do I usually skip gym?", USER_ID)
 
     assert "skip gym" in reply
     mock_retrieve.assert_not_awaited()
@@ -167,16 +181,16 @@ async def test_coaching_reflection_retrieves_lessons_after_history(monkeypatch):
 
     with (
         patch(
-            "app.telegram.intake.recall_history",
+            "app.rag.replies.recall_history",
             return_value="missed gym after late work twice",
         ),
-        patch("app.telegram.intake.detect_patterns", return_value="late work is the gym trigger"),
-        patch("app.telegram.intake.tool_retrieve", mock_retrieve),
-        patch("app.telegram.intake.complete", new=fake_complete),
+        patch("app.rag.replies.detect_patterns", return_value="late work is the gym trigger"),
+        patch("app.rag.replies.retrieve", mock_retrieve),
+        patch("app.rag.replies.complete", new=fake_complete),
     ):
-        from app.telegram.intake import _answer_reflection
+        from app.rag.replies import answer_reflection
 
-        reply = await _answer_reflection("what should I change tomorrow?", USER_ID)
+        reply = await answer_reflection("what should I change tomorrow?", USER_ID)
 
     query = mock_retrieve.await_args.args[0]
     assert "what should I change tomorrow" in query

@@ -2,7 +2,7 @@
 
 For each scenario in the golden set:
   1. Retrieve corpus chunks (rerank lever controlled by --no-rerank flag).
-  2. Generate a coach reply via _generate_reply.
+  2. Generate a coach reply via compose_log_reply.
   3. Score the reply with the LLM judge.
 
 Aggregate and print per-criterion pass rates + headline grounded-response rate.
@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.main import _generate_reply
+from app.rag.replies import compose_log_reply
 from app.rag.retrieve import retrieve
 from evals.golden import GOLDEN_SET
 from evals.judge import JudgeScore, judge
@@ -38,7 +38,7 @@ async def _run(rerank: bool) -> dict[str, float]:
     for i, scenario in enumerate(GOLDEN_SET, start=1):
         print(f"  [{i}/{n}] scoring: {scenario.log[:60]!r}...")
         chunks = await retrieve(scenario.log, rerank=rerank)
-        reply = await _generate_reply(scenario.log, None, chunks)
+        reply = await compose_log_reply(scenario.log, None, chunks)
         score: JudgeScore = await judge(scenario, reply)
 
         if score.specific:

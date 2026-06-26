@@ -1,6 +1,6 @@
 # Deepen Grounded Replies
 
-**Status:** proposed
+**Status:** implemented
 **Review date:** 2026-06-24
 **Source report:** `/private/var/folders/ww/s0hkrfgs7mzcfw5wl8_g1v2m0000gn/T/kaizen-architecture-review-20260624-172219.html#grounded-replies`
 **Recommendation:** Worth exploring
@@ -15,7 +15,7 @@ grounded-reply interface, but the current eval runner imports `_generate_reply`
 from `app/main.py`, which makes the webhook module part of the reply-generation
 interface.
 
-## Current Shape
+## Original Shape
 
 - `app/main.py`: owns reflection classification, coaching reflection lesson
   retrieval, reflection prompt construction, `_generate_reply`, and ordinary
@@ -39,6 +39,18 @@ helpers or duplicated prompts.
 
 The seam should stay narrow: retrieval remains in `app/rag/retrieve.py` and the
 LLM gateway remains `app/llm/client.py`.
+
+## Implemented Shape
+
+- `app/rag/replies.py` owns the typed reply interfaces, prompt rules, bounded
+  lesson/history formatting, reflection-mode classification, and no-lesson
+  abstain behavior.
+- `app/telegram/intake.py` routes reflection questions to `answer_reflection`
+  and no longer owns grounded-reply prompts.
+- `app/agent/graph.py` calls `compose_log_reply` for ordinary user-message
+  responses instead of carrying a duplicate prompt.
+- `evals/runner.py` scores replies through `compose_log_reply`, so evals use
+  the same interface as runtime log replies.
 
 ## Before
 
@@ -113,21 +125,21 @@ flowchart TD
 
 ## Acceptance Criteria
 
-- [ ] A grounded-reply module exposes typed interfaces for ordinary log replies
+- [x] A grounded-reply module exposes typed interfaces for ordinary log replies
       and reflection answers.
-- [ ] `app/main.py`, `app/agent/graph.py`, and `evals/runner.py` no longer
+- [x] `app/main.py`, `app/agent/graph.py`, and `evals/runner.py` no longer
       import or duplicate route-private grounded reply helpers.
-- [ ] Reply generation still uses `app/llm/client.py`; no vendor SDK imports
+- [x] Reply generation still uses `app/llm/client.py`; no vendor SDK imports
       are introduced outside the gateway.
-- [ ] Grounded replies still name a relevant technique when a retrieved lesson
+- [x] Grounded replies still name a relevant technique when a retrieved lesson
       fits and avoid forcing a technique when no retrieved lesson fits.
-- [ ] Focused tests cover log reply composition, action-oriented reflection,
+- [x] Focused tests cover log reply composition, action-oriented reflection,
       descriptive reflection, no-history behavior, and no-fitting-lesson
       abstain behavior.
-- [ ] `uv run pytest tests/rag tests/evals` passes.
+- [x] `uv run pytest tests/rag tests/evals` passes.
 - [ ] If behavior changes, `uv run python -m evals.runner` records measured
       before/after grounded-response results.
-- [ ] `uv run ruff check .` passes for Python changes.
+- [x] `uv run ruff check .` passes for Python changes.
 
 ## Grilling Notes
 

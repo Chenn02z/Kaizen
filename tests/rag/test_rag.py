@@ -9,8 +9,8 @@ AC4: Generated reply names the retrieved technique, not generic advice.
 from unittest.mock import AsyncMock, MagicMock
 
 from app.db.models import CorpusChunk
+from app.rag.replies import compose_log_reply
 from app.rag.retrieve import _rerank, retrieve
-from app.telegram.intake import _generate_reply
 
 
 def _make_chunk(filename: str, content: str) -> CorpusChunk:
@@ -122,8 +122,8 @@ async def test_rerank_changes_ordering(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_generate_reply_names_technique(monkeypatch) -> None:
-    """_generate_reply returns text that names the technique from the chunk."""
+async def test_compose_log_reply_names_technique(monkeypatch) -> None:
+    """compose_log_reply returns text that names the technique from the chunk."""
     chunk = _make_chunk(
         "implementation_intentions.md",
         "Implementation intentions: if X happens, then I will do Y.",
@@ -135,12 +135,48 @@ async def test_generate_reply_names_technique(monkeypatch) -> None:
     mock_response = MagicMock()
     mock_response.content = [mock_block]
     mock_complete = AsyncMock(return_value=mock_response)
-    monkeypatch.setattr("app.telegram.intake.complete", mock_complete)
+    monkeypatch.setattr("app.rag.replies.complete", mock_complete)
 
-    reply = await _generate_reply("skipped gym again", None, [chunk])
+    reply = await compose_log_reply("skipped gym again", None, [chunk])
 
     assert "implementation intentions" in reply.lower()
     mock_complete.assert_called_once()
+
+
+async def test_compose_log_reply_prompt_allows_no_fitting_lesson(monkeypatch) -> None:
+    """The shared prompt tells the model not to force irrelevant techniques."""
+    captured: dict[str, str] = {}
+    chunk = _make_chunk(
+        "urge_surfing.md",
+        "Urge surfing helps with cravings by observing them without acting.",
+    )
+    mock_block = MagicMock()
+    mock_block.type = "text"
+    mock_block.text = "You logged the reading."
+    mock_response = MagicMock()
+    mock_response.content = [mock_block]
+
+    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+        captured["system"] = system or ""
+        return mock_response
+
+    monkeypatch.setattr("app.rag.replies.complete", fake_complete)
+
+    reply = await compose_log_reply("read 20 pages", None, [chunk])
+
+    assert reply == "You logged the reading."
+    assert "urge surfing" in captured["system"].lower()
+    assert "do not force a technique" in captured["system"]
+
+
+async def test_compose_log_reply_no_lessons_abstains_without_llm(monkeypatch) -> None:
+    mock_complete = AsyncMock()
+    monkeypatch.setattr("app.rag.replies.complete", mock_complete)
+
+    reply = await compose_log_reply("read 20 pages", None, [])
+
+    assert reply == "read 20 pages"
+    mock_complete.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

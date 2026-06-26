@@ -61,7 +61,7 @@ uv run python -m evals.runner            # rerank ON
 uv run python -m evals.runner --no-rerank  # rerank OFF
 ```
 
-Each scenario's log is retrieved → `_generate_reply` → scored by the judge
+Each scenario's log is retrieved -> `compose_log_reply` -> scored by the judge
 (`evals/judge.py`) on four boolean criteria. n=25, single run, `claude-haiku-4-5`.
 
 | criterion   | rerank OFF | rerank ON |
