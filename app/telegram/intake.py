@@ -15,6 +15,11 @@ from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
 from app.gamification.xp import XPResult
+from app.habits.commands import (
+    handle_habit_flow_message,
+    start_habit_add,
+    start_habit_edit,
+)
 from app.habits.evidence import recompute_progress_from_effective_state
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
 from app.memory.store import store_facts
@@ -77,6 +82,16 @@ async def handle_message(message: TelegramIntakeMessage) -> IntakeOutcome:
             return await _handle_habit_command(session, message, command)
 
     async with AsyncSessionLocal() as session:
+        habit_flow_reply = await handle_habit_flow_message(
+            session,
+            telegram_user_id=message.telegram_user_id,
+            chat_id=message.chat_id,
+            text=message.text,
+        )
+        if habit_flow_reply is not None:
+            await session.commit()
+            return IntakeOutcome.reply(chat_id=message.chat_id, text=habit_flow_reply)
+
         checkin_answer = await handle_checkin_answer(
             session,
             telegram_user_id=message.telegram_user_id,
@@ -134,22 +149,28 @@ async def _handle_habit_command(
             text=_render_habit_plan_summary(plans),
         )
 
-    await session.rollback()
     if command == "/habit_add":
+        reply = await start_habit_add(
+            session,
+            telegram_user_id=message.telegram_user_id,
+            chat_id=message.chat_id,
+        )
+        await session.commit()
         return IntakeOutcome.reply(
             chat_id=message.chat_id,
-            text=(
-                "Habit add is reserved for the structured onboarding flow. "
-                "Use /habits to review the current plan for now."
-            ),
+            text=reply,
         )
 
+    reply = await start_habit_edit(
+        session,
+        telegram_user_id=message.telegram_user_id,
+        chat_id=message.chat_id,
+        target_text=_command_arg(message.text),
+    )
+    await session.commit()
     return IntakeOutcome.reply(
         chat_id=message.chat_id,
-        text=(
-            "Habit edit is reserved for the structured onboarding flow. "
-            "Send /habit_edit <habit> once that flow is enabled."
-        ),
+        text=reply,
     )
 
 
@@ -222,6 +243,13 @@ def _parse_command(text: Optional[str]) -> str | None:
     if not first.startswith("/"):
         return None
     return first.split("@", maxsplit=1)[0].casefold()
+
+
+def _command_arg(text: Optional[str]) -> str:
+    if not text:
+        return ""
+    parts = text.strip().split(maxsplit=1)
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _render_habit_plan_summary(plans: list[HabitPlanContext]) -> str:

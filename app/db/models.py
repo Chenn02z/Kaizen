@@ -99,6 +99,26 @@ class HabitPlan(Base):
     __table_args__ = (UniqueConstraint("telegram_user_id", "habit_name"),)
 
 
+class HabitCommandFlow(Base):
+    __tablename__ = "habit_command_flows"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    flow_type: Mapped[str] = mapped_column(Text, nullable=False)
+    step: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class CorpusChunk(Base):
     __tablename__ = "corpus_chunks"
 

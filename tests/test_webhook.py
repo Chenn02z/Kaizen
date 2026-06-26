@@ -243,6 +243,29 @@ async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
     )
 
 
+async def test_habits_command_from_allowed_user_replies_without_log(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="/habits"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    sent_text = mock_send.await_args.kwargs["text"]
+    assert "FITNESS" in sent_text
+    assert "- gym: 3x/week - Completed a gym workout session" in sent_text
+
+
 async def test_single_habit_checkin_yes_updates_state_without_log(
     client: AsyncClient,
     db_session,

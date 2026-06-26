@@ -81,6 +81,25 @@ Check-in replies are only applied when there is a same-day fallback check-in.
 They are stored as append-only evidence, update XP/progress from effective habit
 state, and keep the original check-in intervention visible in the dashboard.
 
+## Habit-plan commands
+
+Review and update tracked habits directly in Telegram:
+
+- `/habits` shows the current plan grouped by category.
+- `/habit_add` starts a structured flow for one new habit: name, category,
+  cadence, success condition, aliases, and final confirmation.
+- `/habit_edit <habit>` edits one existing habit. Send one field at a time, for
+  example `aliases: gym, lifted` or `cadence: 3x/week`, then send `yes` to save.
+
+Supported cadence inputs are `daily`, `weekdays`, specific weekdays such as
+`mon/wed/fri`, and weekly targets such as `3x/week`. Send `cancel` during an
+add or edit flow to discard the pending change. Commands are handled before
+ordinary log persistence, so they do not create `logs` rows.
+
+V1 habit renames update the current plan, habit progress, and evidence override
+references, but old `logs` and `extracted_facts` rows remain append-only
+historical records.
+
 ## Load the corpus (RAG)
 
 The grounded-coaching corpus lives in `corpus/*.md`. After migrations, embed it

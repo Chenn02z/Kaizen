@@ -32,6 +32,14 @@ async def db_session():
         await session.execute(
             text(
                 "DO $$ BEGIN"
+                " IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'habit_command_flows')"
+                " THEN TRUNCATE TABLE habit_command_flows RESTART IDENTITY CASCADE; END IF;"
+                " END $$"
+            )
+        )
+        await session.execute(
+            text(
+                "DO $$ BEGIN"
                 " IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'interventions')"
                 " THEN TRUNCATE TABLE interventions RESTART IDENTITY CASCADE; END IF;"
                 " END $$"
