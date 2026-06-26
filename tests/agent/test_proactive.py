@@ -260,6 +260,40 @@ async def test_tick_prompt_uses_corrected_habit_state(db_session, monkeypatch) -
     assert "read: done corrected" in captured["content"]
 
 
+async def test_tick_prompt_uses_checkin_answered_missed_state(db_session, monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    async with AsyncSessionLocal() as session:
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=None,
+                habit_name="read",
+                target_date=_today_at(13).date(),
+                override_status="no",
+                user_text="no",
+                reason="check-in answer for intervention 1",
+            )
+        )
+        await session.commit()
+
+    async def _capture_complete(*args, **kwargs):
+        captured["content"] = kwargs["messages"][0]["content"]
+        return _make_decide_response(
+            action="silent",
+            reason="User answered the read check-in as missed",
+        )
+
+    monkeypatch.setattr("app.agent.graph.complete", _capture_complete)
+    monkeypatch.setattr("app.agent.tools._recall_history", lambda q, uid, limit=5: "")
+    monkeypatch.setattr("app.agent.tools._retrieve", AsyncMock(return_value=[]))
+    monkeypatch.setattr("app.agent.runner.send_message", AsyncMock())
+
+    await run_tick(USER_ID, now=_today_at(13))
+
+    assert "read: missing corrected" in captured["content"]
+
+
 def test_proactive_lesson_query_uses_state_and_recent_pattern() -> None:
     from app.agent.graph import build_proactive_lesson_query
 

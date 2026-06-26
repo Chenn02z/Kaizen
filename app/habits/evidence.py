@@ -37,6 +37,7 @@ class EffectiveHabitState:
     status: str
     corrected: bool
     log_id: int | None = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,7 @@ async def build_effective_evidence_ledger(
 
         effective_habits: list[EffectiveHabitState] = []
         for habit_name in sorted(candidate_habits):
-            status, corrected = _resolve_status(
+            status, corrected, reason = _resolve_status(
                 habit_name,
                 target_date,
                 base_habits,
@@ -115,6 +116,7 @@ async def build_effective_evidence_ledger(
                 status=status,
                 corrected=corrected,
                 log_id=log.id,
+                reason=reason,
             )
             effective_habits.append(state)
             _merge_state(states_by_date, state)
@@ -146,6 +148,7 @@ async def build_effective_evidence_ledger(
                 status=override.override_status,
                 corrected=True,
                 log_id=override.log_id,
+                reason=override.reason,
             )
 
     return EffectiveEvidenceLedger(logs=logs, states_by_date=states_by_date)
@@ -316,13 +319,13 @@ def _resolve_status(
     base_habits: list[str],
     facts: ExtractedFacts | None,
     overrides: dict[tuple[date, str], HabitEvidenceOverride],
-) -> tuple[str | None, bool]:
+) -> tuple[str | None, bool, str | None]:
     override = overrides.get((target_date, habit_name))
     if override is not None:
-        return override.override_status, True
+        return override.override_status, True, override.reason
     if facts is None or habit_name not in base_habits:
-        return None, False
-    return facts.adherence, False
+        return None, False, None
+    return facts.adherence, False, None
 
 
 def _merge_state(
