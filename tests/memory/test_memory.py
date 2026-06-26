@@ -48,11 +48,17 @@ async def test_answer_reflection_uses_planted_pattern(monkeypatch):
     fake_response.content = [fake_block]
 
     with (
-        patch("app.main.recall_history", return_value="skipped exercise, trigger: work stress"),
-        patch("app.main.detect_patterns", return_value="skipped exercise, trigger: work stress"),
-        patch("app.main.complete", new=AsyncMock(return_value=fake_response)),
+        patch(
+            "app.telegram.intake.recall_history",
+            return_value="skipped exercise, trigger: work stress",
+        ),
+        patch(
+            "app.telegram.intake.detect_patterns",
+            return_value="skipped exercise, trigger: work stress",
+        ),
+        patch("app.telegram.intake.complete", new=AsyncMock(return_value=fake_response)),
     ):
-        from app.main import _answer_reflection
+        from app.telegram.intake import _answer_reflection
 
         reply = await _answer_reflection("when do I usually slip?", USER_ID)
 
@@ -99,11 +105,11 @@ async def test_answer_reflection_system_prompt_bounded(monkeypatch):
     patterns_lines = "\n".join([f"pattern {i}: " + "y" * 100 for i in range(20)])
 
     with (
-        patch("app.main.recall_history", return_value=history_lines),
-        patch("app.main.detect_patterns", return_value=patterns_lines),
-        patch("app.main.complete", new=fake_complete),
+        patch("app.telegram.intake.recall_history", return_value=history_lines),
+        patch("app.telegram.intake.detect_patterns", return_value=patterns_lines),
+        patch("app.telegram.intake.complete", new=fake_complete),
     ):
-        from app.main import _answer_reflection
+        from app.telegram.intake import _answer_reflection
 
         await _answer_reflection("how was my week?", USER_ID)
 
@@ -122,12 +128,15 @@ async def test_descriptive_reflection_does_not_retrieve_lessons(monkeypatch):
     mock_retrieve = AsyncMock()
 
     with (
-        patch("app.main.recall_history", return_value="skipped gym after stressful work"),
-        patch("app.main.detect_patterns", return_value="gym slips after work stress"),
-        patch("app.main.tool_retrieve", mock_retrieve),
-        patch("app.main.complete", new=AsyncMock(return_value=fake_response)),
+        patch(
+            "app.telegram.intake.recall_history",
+            return_value="skipped gym after stressful work",
+        ),
+        patch("app.telegram.intake.detect_patterns", return_value="gym slips after work stress"),
+        patch("app.telegram.intake.tool_retrieve", mock_retrieve),
+        patch("app.telegram.intake.complete", new=AsyncMock(return_value=fake_response)),
     ):
-        from app.main import _answer_reflection
+        from app.telegram.intake import _answer_reflection
 
         reply = await _answer_reflection("when do I usually skip gym?", USER_ID)
 
@@ -157,12 +166,15 @@ async def test_coaching_reflection_retrieves_lessons_after_history(monkeypatch):
     mock_retrieve = AsyncMock(return_value=[lesson])
 
     with (
-        patch("app.main.recall_history", return_value="missed gym after late work twice"),
-        patch("app.main.detect_patterns", return_value="late work is the gym trigger"),
-        patch("app.main.tool_retrieve", mock_retrieve),
-        patch("app.main.complete", new=fake_complete),
+        patch(
+            "app.telegram.intake.recall_history",
+            return_value="missed gym after late work twice",
+        ),
+        patch("app.telegram.intake.detect_patterns", return_value="late work is the gym trigger"),
+        patch("app.telegram.intake.tool_retrieve", mock_retrieve),
+        patch("app.telegram.intake.complete", new=fake_complete),
     ):
-        from app.main import _answer_reflection
+        from app.telegram.intake import _answer_reflection
 
         reply = await _answer_reflection("what should I change tomorrow?", USER_ID)
 

@@ -164,8 +164,8 @@ async def test_reflection_query_uses_reflection_path(
 
     mock_reflection = AsyncMock(return_value="You usually slip after stressful work days.")
     mock_agent = AsyncMock(return_value="agent reply")
-    monkeypatch.setattr("app.main._answer_reflection", mock_reflection)
-    monkeypatch.setattr("app.main.run_user_message", mock_agent)
+    monkeypatch.setattr("app.telegram.intake._answer_reflection", mock_reflection)
+    monkeypatch.setattr("app.telegram.intake.run_user_message", mock_agent)
 
     try:
         response = await client.post(
@@ -372,10 +372,10 @@ async def test_bare_answer_without_same_day_checkin_falls_through_to_log(
 ) -> None:
     await _insert_checkin("read", created_at=_today_at(21) - timedelta(days=1))
     monkeypatch.setattr(
-        "app.main.extract",
+        "app.telegram.intake.extract",
         AsyncMock(return_value=ExtractedFactsSchema(habits=[], adherence=None)),
     )
-    monkeypatch.setattr("app.main.run_user_message", AsyncMock(return_value="logged"))
+    monkeypatch.setattr("app.telegram.intake.run_user_message", AsyncMock(return_value="logged"))
 
     mock_send = AsyncMock()
     app.dependency_overrides[get_send_message] = lambda: mock_send
