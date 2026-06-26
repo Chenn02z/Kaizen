@@ -226,6 +226,29 @@ async def test_daily_cap_blocks_fifth_tick(db_session, monkeypatch) -> None:
     mock_send.assert_not_awaited()
 
 
+async def test_tick_graph_error_records_silence_without_sending(db_session, monkeypatch) -> None:
+    async def _raise_graph_error(context):
+        raise RuntimeError("graph unavailable")
+
+    monkeypatch.setattr("app.agent.runner._run_graph_intervention_decider", _raise_graph_error)
+
+    mock_send = AsyncMock()
+    monkeypatch.setattr("app.agent.runner.send_message", mock_send)
+
+    await run_tick(USER_ID, now=_today_at(13))
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Intervention).where(Intervention.telegram_user_id == USER_ID)
+        )
+        rows = result.scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].kind == "silence"
+    assert rows[0].reason == "graph error"
+    mock_send.assert_not_awaited()
+
+
 async def test_tick_prompt_uses_corrected_habit_state(db_session, monkeypatch) -> None:
     captured: dict[str, str] = {}
 
