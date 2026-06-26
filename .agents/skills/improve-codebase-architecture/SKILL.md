@@ -80,6 +80,15 @@ End with a top recommendation and why it should be handled first.
 See [HTML-REPORT.md](HTML-REPORT.md) for the scaffold, diagram patterns, and
 styling guidance.
 
+Also create markdown handoff tickets in the repo under `docs/techdebt/`, one
+file per candidate. Use [TECHDEBT-TICKET.md](TECHDEBT-TICKET.md) as the template
+and name files `YYYY-MM-DD-<candidate-slug>.md`. For example, a report with four
+architecture suggestions should produce four separate markdown files, not one
+combined document. Each ticket should link back to the HTML report anchor,
+capture the current code snapshot, include before/after Mermaid diagrams, and
+state acceptance criteria for implementation. Keep these tickets proposed until
+the user chooses one for grilling.
+
 Do not implement or finalize a new interface during the report. After the file is
 written, ask: "Which candidate do you want to grill first?"
 
