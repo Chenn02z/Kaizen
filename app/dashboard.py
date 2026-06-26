@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -15,12 +15,9 @@ from app.db.models import (
     Log,
 )
 from app.gamification.stats import UserStats, get_user_stats
-from app.habits.evidence import (
-    EffectiveEvidenceLedger,
-    build_effective_evidence_ledger,
-    is_positive_status,
-)
-from app.habits.plan import HabitPlanContext, get_habit_plan_context, habit_due_today
+from app.habits.evidence import EffectiveEvidenceLedger, build_effective_evidence_ledger
+from app.habits.plan import HabitPlanContext, get_habit_plan_context
+from app.habits.state import HabitReadState, get_dashboard_habit_rows
 
 DashboardHabitStatus = Literal["done", "missing", "not_due", "unknown"]
 
@@ -75,15 +72,15 @@ async def get_dashboard_data(
     await get_habit_plan_context(session, telegram_user_id)
     progress = await get_user_stats(telegram_user_id, session)
     plans = await _load_habit_plans(session, telegram_user_id)
-    week_start = current.date() - timedelta(days=current.date().weekday())
-    ledger = await build_effective_evidence_ledger(
-        session,
-        telegram_user_id,
-        start_date=week_start,
-        end_date=current.date(),
-    )
-    today_states = ledger.states_by_date.get(current.date(), {})
-    week_counts = _count_positive_days(ledger)
+    habit_states = {
+        state.habit_name: state
+        for state in await get_dashboard_habit_rows(
+            session,
+            telegram_user_id,
+            [plan for plan, _ in plans],
+            _dashboard_wall_time(current),
+        )
+    }
     recent_logs = await _load_recent_logs(session, telegram_user_id)
     recent_corrections = await build_effective_evidence_ledger(session, telegram_user_id)
     recent_interventions = await _load_recent_interventions(session, telegram_user_id)
@@ -91,7 +88,7 @@ async def get_dashboard_data(
     return DashboardData(
         progress=progress,
         habits=[
-            _build_habit_row(plan, habit_progress, current, today_states, week_counts)
+            _build_habit_row(plan, habit_progress, habit_states[plan.habit_name])
             for plan, habit_progress in plans
         ],
         recent_logs=_attach_corrections_to_logs(recent_logs, recent_corrections),
@@ -189,20 +186,8 @@ async def _load_recent_interventions(
 def _build_habit_row(
     plan: HabitPlanContext,
     habit_progress: HabitProgress | None,
-    now: datetime,
-    today_states: dict[str, Any],
-    week_counts: dict[str, int],
+    state: HabitReadState,
 ) -> DashboardHabit:
-    today_state = today_states.get(plan.habit_name)
-    done = today_state is not None and is_positive_status(today_state.status)
-    due_today = habit_due_today(plan, now.date(), week_counts.get(plan.habit_name, 0))
-    if done:
-        status: DashboardHabitStatus = "done"
-    elif due_today:
-        window = _parse_window(plan.expected_evidence_window)
-        status = "missing" if now.time() >= window else "unknown"
-    else:
-        status = "not_due"
     return DashboardHabit(
         name=plan.habit_name,
         category=plan.category_name,
@@ -211,8 +196,8 @@ def _build_habit_row(
         cadence_type=plan.cadence_type,
         cadence_value=plan.cadence_value,
         success_condition=plan.success_condition,
-        today_status=status,
-        is_corrected_today=bool(today_state.corrected) if today_state else False,
+        today_status=state.day_status,
+        is_corrected_today=state.is_corrected,
     )
 
 
@@ -229,26 +214,11 @@ def _attach_corrections_to_logs(
     ]
 
 
-def _count_positive_days(ledger: EffectiveEvidenceLedger) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for day_states in ledger.states_by_date.values():
-        for state in day_states.values():
-            if not is_positive_status(state.status):
-                continue
-            counts[state.habit_name] = counts.get(state.habit_name, 0) + 1
-    return counts
-
-
-def _day_start(day: date) -> datetime:
-    return datetime.combine(day, time.min).replace(tzinfo=timezone.utc)
-
-
-def _parse_window(value: str | None) -> time:
-    if not value:
-        return time(hour=20)
-    hour, minute = value.split(":", maxsplit=1)
-    return time(hour=int(hour), minute=int(minute))
-
-
 def utcnow() -> datetime:
     return datetime.now(get_app_timezone())
+
+
+def _dashboard_wall_time(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)

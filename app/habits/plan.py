@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Sequence
 
 from pydantic import BaseModel
@@ -7,11 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_app_timezone
 from app.db.models import HabitCategory, HabitPlan, Intervention
-from app.habits.evidence import build_effective_evidence_ledger, is_positive_status
+from app.habits.state import get_due_habits
 
 _DEFAULT_WINDOW = "20:00"
-_WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-_CHECKIN_ANSWER_REASON_PREFIX = "check-in answer"
 
 
 class HabitPlanContext(BaseModel):
@@ -189,38 +187,17 @@ async def due_habits_missing_evidence(
     now: datetime | None = None,
 ) -> list[DueHabit]:
     current = _app_datetime(now)
-    if not _fallback_window_has_arrived(current):
-        return []
-
     plans = await get_habit_plan_context(session, telegram_user_id)
-    ledger = await build_effective_evidence_ledger(
-        session,
-        telegram_user_id,
-        start_date=_week_start(current.date()),
-        end_date=current.date(),
-    )
-    today_states = ledger.states_by_date.get(current.date(), {})
-    completed_this_week = _weekly_positive_counts(ledger.states_by_date)
-
-    due: list[DueHabit] = []
-    for plan in plans:
-        if not plan.fallback_checkin_enabled:
-            continue
-        today_state = today_states.get(plan.habit_name)
-        if today_state is not None:
-            if is_positive_status(today_state.status) or _is_checkin_answer_state(today_state):
-                continue
-        reason = _due_reason(plan, current.date(), completed_this_week.get(plan.habit_name, 0))
-        if reason is not None:
-            due.append(
-                DueHabit(
-                    habit_name=plan.habit_name,
-                    category_name=plan.category_name,
-                    success_condition=plan.success_condition,
-                    reason=reason,
-                )
-            )
-    return due
+    due_states = await get_due_habits(session, telegram_user_id, plans, current)
+    return [
+        DueHabit(
+            habit_name=state.habit_name,
+            category_name=state.category_name,
+            success_condition=state.success_condition,
+            reason=state.due_reason or "habit has no completion evidence today",
+        )
+        for state in due_states
+    ]
 
 
 async def has_fallback_checkin_today(
@@ -249,52 +226,8 @@ def build_fallback_checkin_message(due_habits: Sequence[DueHabit]) -> str:
     return f"Quick check-in: did you complete {habit_text} today? Reply yes, partial, or no."
 
 
-def _fallback_window_has_arrived(current: datetime) -> bool:
-    return _app_datetime(current).time() >= _parse_window(_DEFAULT_WINDOW)
-
-
-def _parse_window(value: str | None) -> time:
-    if not value:
-        return time(hour=20)
-    hour, minute = value.split(":", maxsplit=1)
-    return time(hour=int(hour), minute=int(minute))
-
-
-def _due_reason(plan: HabitPlanContext, today: date, weekly_completed: int) -> str | None:
-    if not habit_due_today(plan, today, weekly_completed):
-        return None
-    if plan.cadence_type == "daily":
-        return "daily habit has no completion evidence today"
-    if plan.cadence_type == "specific_weekdays":
-        return "weekday habit has no completion evidence today"
-    if plan.cadence_type == "times_per_week":
-        target = int(plan.cadence_value or 0)
-        return f"weekly target needs completion today ({weekly_completed}/{target} done)"
-    return None
-
-
-def habit_due_today(plan: HabitPlanContext, today: date, weekly_completed: int) -> bool:
-    if plan.cadence_type == "daily":
-        return True
-    if plan.cadence_type == "specific_weekdays":
-        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
-        return _WEEKDAY_KEYS[today.weekday()] in values
-    if plan.cadence_type == "times_per_week":
-        target = int(plan.cadence_value or 0)
-        if target <= 0:
-            return False
-        remaining_needed = max(0, target - weekly_completed)
-        days_remaining_after_today = 6 - today.weekday()
-        return remaining_needed > days_remaining_after_today
-    return False
-
-
 def _day_start(day: date) -> datetime:
     return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
-
-
-def _week_start(day: date) -> date:
-    return day - timedelta(days=day.weekday())
 
 
 def _app_datetime(value: datetime | None) -> datetime:
@@ -303,18 +236,3 @@ def _app_datetime(value: datetime | None) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=get_app_timezone())
     return value.astimezone(get_app_timezone())
-
-
-def _weekly_positive_counts(states_by_date: dict[date, dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for day_states in states_by_date.values():
-        for state in day_states.values():
-            if not is_positive_status(state.status):
-                continue
-            counts[state.habit_name] = counts.get(state.habit_name, 0) + 1
-    return counts
-
-
-def _is_checkin_answer_state(state: Any) -> bool:
-    reason = getattr(state, "reason", None)
-    return isinstance(reason, str) and reason.startswith(_CHECKIN_ANSWER_REASON_PREFIX)

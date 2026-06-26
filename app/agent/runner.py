@@ -11,14 +11,13 @@ from app.agent.graph import get_graph
 from app.config import get_app_timezone
 from app.db.models import Intervention
 from app.db.session import AsyncSessionLocal
-from app.habits.evidence import build_effective_evidence_ledger, is_positive_status
 from app.habits.plan import (
     build_fallback_checkin_message,
     due_habits_missing_evidence,
     get_habit_plan_context,
-    habit_due_today,
     has_fallback_checkin_today,
 )
+from app.habits.state import build_agent_habit_summary
 from app.telegram.client import send_message
 
 logger = logging.getLogger(__name__)
@@ -204,33 +203,5 @@ async def _build_habit_state_summary(
     telegram_user_id: int,
     now: datetime | None,
 ) -> str:
-    current = now or datetime.now(get_app_timezone())
-    if current.tzinfo is not None:
-        current = current.astimezone(get_app_timezone())
     plans = await get_habit_plan_context(session, telegram_user_id)
-    ledger = await build_effective_evidence_ledger(
-        session,
-        telegram_user_id,
-        start_date=current.date() - timedelta(days=current.date().weekday()),
-        end_date=current.date(),
-    )
-    today_states = ledger.states_by_date.get(current.date(), {})
-    week_counts: dict[str, int] = {}
-    for day_states in ledger.states_by_date.values():
-        for state in day_states.values():
-            if not is_positive_status(state.status):
-                continue
-            week_counts[state.habit_name] = week_counts.get(state.habit_name, 0) + 1
-
-    lines: list[str] = []
-    for plan in plans:
-        state = today_states.get(plan.habit_name)
-        if state and is_positive_status(state.status):
-            summary = "done"
-        elif habit_due_today(plan, current.date(), week_counts.get(plan.habit_name, 0)):
-            summary = "missing"
-        else:
-            summary = "not_due"
-        corrected = " corrected" if state and state.corrected else ""
-        lines.append(f"- {plan.habit_name}: {summary}{corrected}")
-    return "\n".join(lines) if lines else "No habit state available."
+    return await build_agent_habit_summary(session, telegram_user_id, plans, now)
