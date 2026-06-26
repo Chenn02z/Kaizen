@@ -212,3 +212,27 @@ async def test_due_habits_respect_negative_override(db_session) -> None:
 
     names = {habit.habit_name for habit in due}
     assert "leetcode" in names
+
+
+async def test_due_habits_do_not_repeat_checkin_answered_no(db_session) -> None:
+    now = datetime(2026, 6, 15, 13, 0, tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        await get_habit_plan_context(session, USER_ID)
+        session.add(
+            HabitEvidenceOverride(
+                telegram_user_id=USER_ID,
+                log_id=None,
+                habit_name="read",
+                target_date=now.date(),
+                override_status="no",
+                user_text="no",
+                reason="check-in answer for intervention 1",
+            )
+        )
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        due = await due_habits_missing_evidence(session, USER_ID, now)
+
+    names = {habit.habit_name for habit in due}
+    assert "read" not in names

@@ -63,6 +63,24 @@ original extracted facts, applies the newest correction to habit-state
 computation, updates XP/progress from the corrected state, and marks corrected
 evidence in the dashboard.
 
+## Check-in replies
+
+When Kaizen sends a fallback check-in like `did you complete read today?`, reply
+in Telegram with:
+
+- `yes`
+- `partial`
+- `no`
+
+For a multi-habit check-in, include each habit name with its status, for example:
+
+- `gym yes, read no`
+- `leetcode partial, read yes`
+
+Check-in replies are only applied when there is a same-day fallback check-in.
+They are stored as append-only evidence, update XP/progress from effective habit
+state, and keep the original check-in intervention visible in the dashboard.
+
 ## Load the corpus (RAG)
 
 The grounded-coaching corpus lives in `corpus/*.md`. After migrations, embed it

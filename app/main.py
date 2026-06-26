@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.agent.runner import run_user_message
 from app.agent.scheduler import start_scheduler, stop_scheduler
 from app.agent.tools import tool_retrieve
+from app.checkins.service import handle_checkin_answer
 from app.config import settings
 from app.corrections.service import handle_correction_message
 from app.dashboard import DashboardData, get_dashboard_data
@@ -208,6 +209,16 @@ async def webhook(
         return {}
 
     async with AsyncSessionLocal() as session:
+        checkin_answer = await handle_checkin_answer(
+            session,
+            telegram_user_id=message.from_.id,
+            text=message.text or "",
+        )
+        if checkin_answer is not None and checkin_answer.handled:
+            await session.commit()
+            await _send(chat_id=message.chat.id, text=checkin_answer.reply_text)
+            return {}
+
         correction = await handle_correction_message(
             session,
             telegram_user_id=message.from_.id,

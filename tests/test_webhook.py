@@ -1,14 +1,15 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.config import settings
+from app.config import get_app_timezone, settings
 from app.dashboard import DashboardData
-from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log, UserProgress
+from app.db.models import ExtractedFacts, HabitEvidenceOverride, Intervention, Log, UserProgress
 from app.db.session import AsyncSessionLocal
+from app.extract.schema import ExtractedFacts as ExtractedFactsSchema
 from app.main import app, get_send_message
 from app.telegram.webapp import dashboard_inline_keyboard
 
@@ -16,6 +17,15 @@ VALID_HEADERS = {"X-Telegram-Bot-Api-Secret-Token": settings.telegram_webhook_se
 
 ALLOWED_UID = settings.allowed_user_id
 OTHER_UID = ALLOWED_UID + 1
+
+
+def _today_at(hour: int) -> datetime:
+    return datetime.now(get_app_timezone()).replace(
+        hour=hour,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
 
 
 def _make_update(user_id: int, text: str = "hello") -> dict:
@@ -40,6 +50,24 @@ async def _override_count() -> int:
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(func.count()).select_from(HabitEvidenceOverride))
         return result.scalar_one()
+
+
+async def _insert_checkin(*habit_names: str, created_at: datetime) -> None:
+    async with AsyncSessionLocal() as session:
+        session.add(
+            Intervention(
+                telegram_user_id=ALLOWED_UID,
+                created_at=created_at,
+                kind="check-in",
+                reason="fallback check-in: missing evidence for " + ", ".join(habit_names),
+                message=(
+                    "Quick check-in: did you complete "
+                    + ", ".join(habit_names)
+                    + " today? Reply yes, partial, or no."
+                ),
+            )
+        )
+        await session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +241,256 @@ async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
         text="Open your dashboard:",
         reply_markup=dashboard_inline_keyboard(),
     )
+
+
+async def test_single_habit_checkin_yes_updates_state_without_log(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    import app.dashboard as dashboard_module
+
+    now = _today_at(21)
+    monkeypatch.setattr(dashboard_module, "utcnow", lambda: now)
+    await _insert_checkin("read", created_at=now)
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="yes"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    assert await _override_count() == 1
+    mock_send.assert_awaited_once()
+    assert "read=yes" in mock_send.await_args.kwargs["text"]
+    assert "XP +50" in mock_send.await_args.kwargs["text"]
+
+    async with AsyncSessionLocal() as session:
+        override = (await session.execute(select(HabitEvidenceOverride))).scalar_one()
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+        checkin = (await session.execute(select(Intervention))).scalar_one()
+    assert override.habit_name == "read"
+    assert override.override_status == "yes"
+    assert override.reason.startswith("check-in answer")
+    assert progress.xp == 50
+    assert checkin.engaged is True
+
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    dashboard = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    habits = {habit.name: habit for habit in dashboard.habits}
+    assert habits["read"].today_status == "done"
+    assert habits["read"].is_corrected_today is True
+    assert dashboard.recent_interventions[0].kind == "check-in"
+
+
+async def test_single_habit_checkin_partial_awards_partial_xp(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    import app.dashboard as dashboard_module
+
+    now = _today_at(21)
+    monkeypatch.setattr(dashboard_module, "utcnow", lambda: now)
+    await _insert_checkin("read", created_at=now)
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="partial"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    async with AsyncSessionLocal() as session:
+        override = (await session.execute(select(HabitEvidenceOverride))).scalar_one()
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+    assert override.override_status == "partial"
+    assert progress.xp == 20
+
+    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
+    dashboard = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    assert {habit.name: habit for habit in dashboard.habits}["read"].today_status == "done"
+
+
+async def test_single_habit_checkin_no_records_miss_without_xp_or_log(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    now = _today_at(21)
+    await _insert_checkin("read", created_at=now)
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="no"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    async with AsyncSessionLocal() as session:
+        override = (await session.execute(select(HabitEvidenceOverride))).scalar_one()
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+    assert override.override_status == "no"
+    assert progress.xp == 0
+    assert "XP +" not in mock_send.await_args.kwargs["text"]
+
+
+async def test_bare_answer_without_same_day_checkin_falls_through_to_log(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+) -> None:
+    await _insert_checkin("read", created_at=_today_at(21) - timedelta(days=1))
+    monkeypatch.setattr(
+        "app.main.extract",
+        AsyncMock(return_value=ExtractedFactsSchema(habits=[], adherence=None)),
+    )
+    monkeypatch.setattr("app.main.run_user_message", AsyncMock(return_value="logged"))
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="yes"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 1
+    assert await _override_count() == 0
+    mock_send.assert_awaited_once_with(chat_id=ALLOWED_UID, text="logged")
+
+
+async def test_multi_habit_bare_checkin_answer_asks_follow_up_without_evidence(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    await _insert_checkin(
+        "gym",
+        "read",
+        created_at=_today_at(21),
+    )
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="yes"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    assert await _override_count() == 0
+    sent_text = mock_send.await_args.kwargs["text"]
+    assert "Which habit should I update?" in sent_text
+    assert "gym yes" in sent_text
+    assert "read yes" in sent_text
+
+
+async def test_multi_habit_explicit_checkin_answer_records_each_status(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    await _insert_checkin(
+        "gym",
+        "read",
+        created_at=_today_at(21),
+    )
+
+    mock_send = AsyncMock()
+    app.dependency_overrides[get_send_message] = lambda: mock_send
+    try:
+        response = await client.post(
+            "/webhook",
+            json=_make_update(ALLOWED_UID, text="gym yes, read no"),
+            headers=VALID_HEADERS,
+        )
+    finally:
+        app.dependency_overrides.pop(get_send_message, None)
+
+    assert response.status_code == 200
+    assert await _log_count() == 0
+    async with AsyncSessionLocal() as session:
+        overrides = (await session.execute(select(HabitEvidenceOverride))).scalars().all()
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+    assert {row.habit_name: row.override_status for row in overrides} == {
+        "gym": "yes",
+        "read": "no",
+    }
+    assert progress.xp == 50
+
+
+async def test_retrying_same_checkin_answer_keeps_progress_idempotent(
+    client: AsyncClient,
+    db_session,
+) -> None:
+    await _insert_checkin("read", created_at=_today_at(21))
+
+    for _ in range(2):
+        mock_send = AsyncMock()
+        app.dependency_overrides[get_send_message] = lambda: mock_send
+        try:
+            response = await client.post(
+                "/webhook",
+                json=_make_update(ALLOWED_UID, text="yes"),
+                headers=VALID_HEADERS,
+            )
+        finally:
+            app.dependency_overrides.pop(get_send_message, None)
+        assert response.status_code == 200
+
+    async with AsyncSessionLocal() as session:
+        progress = (
+            await session.execute(
+                select(UserProgress).where(UserProgress.telegram_user_id == ALLOWED_UID)
+            )
+        ).scalar_one()
+        overrides = (await session.execute(select(HabitEvidenceOverride))).scalars().all()
+
+    assert progress.xp == 50
+    assert len(overrides) == 2
+    assert await _log_count() == 0
 
 
 async def test_false_negative_correction_updates_dashboard_and_keeps_audit_rows(

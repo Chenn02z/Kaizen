@@ -11,6 +11,7 @@ from app.habits.evidence import build_effective_evidence_ledger, is_positive_sta
 
 _DEFAULT_WINDOW = "20:00"
 _WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+_CHECKIN_ANSWER_REASON_PREFIX = "check-in answer"
 
 
 class HabitPlanContext(BaseModel):
@@ -205,10 +206,10 @@ async def due_habits_missing_evidence(
     for plan in plans:
         if not plan.fallback_checkin_enabled:
             continue
-        if plan.habit_name in today_states and is_positive_status(
-            today_states[plan.habit_name].status
-        ):
-            continue
+        today_state = today_states.get(plan.habit_name)
+        if today_state is not None:
+            if is_positive_status(today_state.status) or _is_checkin_answer_state(today_state):
+                continue
         reason = _due_reason(plan, current.date(), completed_this_week.get(plan.habit_name, 0))
         if reason is not None:
             due.append(
@@ -312,3 +313,8 @@ def _weekly_positive_counts(states_by_date: dict[date, dict[str, Any]]) -> dict[
                 continue
             counts[state.habit_name] = counts.get(state.habit_name, 0) + 1
     return counts
+
+
+def _is_checkin_answer_state(state: Any) -> bool:
+    reason = getattr(state, "reason", None)
+    return isinstance(reason, str) and reason.startswith(_CHECKIN_ANSWER_REASON_PREFIX)
