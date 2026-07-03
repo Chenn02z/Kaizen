@@ -23,6 +23,7 @@ class LogReplyInput(BaseModel):
     log_text: str
     chunks: list[CorpusChunk]
     history: str = ""
+    habit_state_summary: str = ""
     facts: Any | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -38,6 +39,10 @@ _LOG_REPLY_SYSTEM = (
     "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
     "Name the technique you are applying. Be concise (2-4 sentences). "
     "If the user's history shows a pattern relevant to this log, reference it. "
+    "Treat the provided habit state as source-of-truth for cadence targets "
+    "and whether a habit is due today. "
+    "Do not claim a target is missing if the habit state shows one. "
+    "For weekly habits, do not imply the user must complete it today unless due_today=yes. "
     "If no provided technique fits the log, acknowledge the log from the user's history only "
     "and do not force a technique."
 )
@@ -113,21 +118,24 @@ async def compose_log_reply(
     facts: Any | None,
     chunks: list[CorpusChunk],
     history: str = "",
+    habit_state_summary: str = "",
 ) -> str:
     request = LogReplyInput(
         log_text=log_text,
         facts=facts,
         chunks=chunks,
         history=history,
+        habit_state_summary=habit_state_summary,
     )
     if not request.chunks:
         return request.log_text
 
     context = _format_lessons(request.chunks, limit=2000)
     history_section = _format_history(request.history, limit=1500)
+    habit_state_section = _format_habit_state(request.habit_state_summary, limit=1500)
     system = (
         f"{_LOG_REPLY_SYSTEM}\n\n"
-        f"Techniques available:\n\n{context}{history_section}"
+        f"Techniques available:\n\n{context}{history_section}{habit_state_section}"
     )
     response = await complete(
         messages=[{"role": "user", "content": request.log_text}],
@@ -206,6 +214,12 @@ def _format_history(history: str, *, limit: int) -> str:
     if not history:
         return ""
     return f"\n\nUser's recent history:\n{history[:limit]}"
+
+
+def _format_habit_state(habit_state_summary: str, *, limit: int) -> str:
+    if not habit_state_summary:
+        return ""
+    return f"\n\nCurrent habit state:\n{habit_state_summary[:limit]}"
 
 
 def _format_reflection_context(*, history: str, patterns: str) -> str:

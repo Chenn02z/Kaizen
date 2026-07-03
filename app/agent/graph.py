@@ -180,6 +180,7 @@ async def respond(state: AgentState) -> AgentState:
             facts=state.get("facts"),
             chunks=chunks,
             history=history,
+            habit_state_summary=state.get("habit_state_summary") or "",
         )
     except Exception:
         logger.exception("respond node failed")

@@ -103,11 +103,38 @@ async def build_agent_habit_summary(
     now: datetime | None = None,
 ) -> str:
     rows = await get_habit_day_states(session, telegram_user_id, plans, now)
-    lines = [
-        f"- {row.habit_name}: {row.agent_status}{' corrected' if row.is_corrected else ''}"
-        for row in rows
-    ]
+    lines = [_format_agent_habit_line(row) for row in rows]
     return "\n".join(lines) if lines else "No habit state available."
+
+
+def _format_agent_habit_line(row: HabitReadState) -> str:
+    cadence = row.cadence_type
+    if row.cadence_value is not None:
+        cadence = f"{cadence}={row.cadence_value}"
+
+    parts = [
+        f"cadence={cadence}",
+        f"due_today={'yes' if row.cadence_due_today else 'no'}",
+    ]
+    if row.cadence_type == "times_per_week":
+        target = int(row.cadence_value or 0)
+        parts.append(f"weekly_progress={row.weekly_positive_count}/{target}")
+    if row.day_status == "done":
+        parts.append("today_evidence=present")
+    elif row.day_status == "missing":
+        parts.append("today_evidence=missing")
+    else:
+        parts.append("today_evidence=not_required_today")
+    if row.due_reason:
+        parts.append(f"due_reason={row.due_reason}")
+    if row.is_corrected:
+        parts.append("corrected=yes")
+    if row.is_checkin_answer:
+        parts.append("checkin_answered=yes")
+    parts.append(f"success_condition={row.success_condition}")
+
+    detail = "; ".join(parts)
+    return f"- {row.habit_name}: {row.agent_status}. {detail}"
 
 
 def weekly_positive_counts(

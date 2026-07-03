@@ -45,6 +45,7 @@ async def run_user_message(
     telegram_user_id: int,
     user_text: str,
     facts: Optional[Any] = None,
+    now: datetime | None = None,
 ) -> str:
     """Run the agent loop for an inbound user message and return the reply text.
 
@@ -52,6 +53,8 @@ async def run_user_message(
     when the webhook has already run extraction for persistence purposes).
     """
     graph = get_graph()
+    async with AsyncSessionLocal() as session:
+        habit_state_summary = await _build_habit_state_summary(session, telegram_user_id, now)
     initial_state = {
         "event_kind": "user_message",
         "telegram_user_id": telegram_user_id,
@@ -60,7 +63,7 @@ async def run_user_message(
         "retrieved_chunks": [],
         "lesson_query": None,
         "history": "",
-        "habit_state_summary": "",
+        "habit_state_summary": habit_state_summary,
         "decision": "respond",
         "reply_text": user_text,
         "technique": None,
