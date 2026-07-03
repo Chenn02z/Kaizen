@@ -47,6 +47,24 @@ class HabitReadState:
     is_checkin_answer: bool
 
 
+@dataclass(frozen=True)
+class HabitWeekDayState:
+    date: date
+    weekday: str
+    label: str
+    status: HabitDayStatus
+    is_corrected: bool
+    is_checkin_answer: bool
+
+
+@dataclass(frozen=True)
+class HabitWeekState:
+    habit_name: str
+    days: list[HabitWeekDayState]
+    done_count: int
+    target_count: int
+
+
 async def get_habit_day_states(
     session: AsyncSession,
     telegram_user_id: int,
@@ -94,6 +112,48 @@ async def get_dashboard_habit_rows(
     now: datetime | None = None,
 ) -> list[HabitReadState]:
     return await get_habit_day_states(session, telegram_user_id, plans, now)
+
+
+async def get_habit_week_states(
+    session: AsyncSession,
+    telegram_user_id: int,
+    plans: Sequence[HabitPlanRead],
+    now: datetime | None = None,
+) -> list[HabitWeekState]:
+    current = _app_datetime(now)
+    today = current.date()
+    week_start = _week_start(today)
+    week_end = week_start + timedelta(days=6)
+    ledger = await build_effective_evidence_ledger(
+        session,
+        telegram_user_id,
+        start_date=week_start,
+        end_date=week_end,
+    )
+
+    rows: list[HabitWeekState] = []
+    for plan in plans:
+        days = [
+            _build_habit_week_day_state(
+                plan,
+                target_day=week_start + timedelta(days=offset),
+                today=today,
+                current_time=current.time(),
+                effective_state=ledger.states_by_date.get(
+                    week_start + timedelta(days=offset), {}
+                ).get(plan.habit_name),
+            )
+            for offset in range(7)
+        ]
+        rows.append(
+            HabitWeekState(
+                habit_name=plan.habit_name,
+                days=days,
+                done_count=sum(1 for day in days if day.status == "done"),
+                target_count=_weekly_target_count(plan),
+            )
+        )
+    return rows
 
 
 async def build_agent_habit_summary(
@@ -165,6 +225,17 @@ def habit_due_today(plan: HabitPlanRead, today: date, weekly_completed: int) -> 
     return False
 
 
+def habit_due_on_date(plan: HabitPlanRead, target_day: date) -> bool:
+    if plan.cadence_type == "daily":
+        return True
+    if plan.cadence_type == "specific_weekdays":
+        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
+        return _WEEKDAY_KEYS[target_day.weekday()] in values
+    if plan.cadence_type == "times_per_week":
+        return True
+    return False
+
+
 def fallback_window_has_arrived(current: datetime, expected_window: str | None = None) -> bool:
     return _app_datetime(current).time() >= _parse_window(expected_window or _DEFAULT_WINDOW)
 
@@ -199,6 +270,7 @@ def _build_habit_read_state(
         and not is_checkin_answer
         and current_time >= _parse_window(plan.expected_evidence_window)
     )
+
     return HabitReadState(
         habit_name=plan.habit_name,
         category_name=plan.category_name,
@@ -217,6 +289,43 @@ def _build_habit_read_state(
     )
 
 
+def _build_habit_week_day_state(
+    plan: HabitPlanRead,
+    *,
+    target_day: date,
+    today: date,
+    current_time: time,
+    effective_state: EffectiveHabitState | None,
+) -> HabitWeekDayState:
+    positive = effective_state is not None and is_positive_status(effective_state.status)
+    is_checkin_answer = _is_checkin_answer_state(effective_state)
+    if positive:
+        status: HabitDayStatus = "done"
+    elif effective_state is not None:
+        status = "missing"
+    elif not habit_due_on_date(plan, target_day):
+        status = "not_due"
+    elif target_day < today:
+        status = "missing"
+    elif target_day == today:
+        status = (
+            "missing"
+            if current_time >= _parse_window(plan.expected_evidence_window)
+            else "unknown"
+        )
+    else:
+        status = "unknown"
+
+    return HabitWeekDayState(
+        date=target_day,
+        weekday=_WEEKDAY_KEYS[target_day.weekday()],
+        label="MTWTFSS"[target_day.weekday()],
+        status=status,
+        is_corrected=bool(effective_state.corrected) if effective_state else False,
+        is_checkin_answer=is_checkin_answer,
+    )
+
+
 def _due_reason(plan: HabitPlanRead, today: date, weekly_completed: int) -> str | None:
     if not habit_due_today(plan, today, weekly_completed):
         return None
@@ -228,6 +337,17 @@ def _due_reason(plan: HabitPlanRead, today: date, weekly_completed: int) -> str 
         target = int(plan.cadence_value or 0)
         return f"weekly target needs completion today ({weekly_completed}/{target} done)"
     return None
+
+
+def _weekly_target_count(plan: HabitPlanRead) -> int:
+    if plan.cadence_type == "daily":
+        return 7
+    if plan.cadence_type == "specific_weekdays":
+        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
+        return len(values)
+    if plan.cadence_type == "times_per_week":
+        return max(0, int(plan.cadence_value or 0))
+    return 0
 
 
 def _is_checkin_answer_state(state: EffectiveHabitState | None) -> bool:

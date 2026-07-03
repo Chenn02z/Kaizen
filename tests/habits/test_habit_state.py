@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log
 from app.db.session import AsyncSessionLocal
 from app.habits.plan import HabitPlanContext
-from app.habits.state import get_habit_day_states
+from app.habits.state import get_habit_day_states, get_habit_week_states
 
 USER_ID = 12345
 
@@ -187,3 +187,36 @@ async def test_read_model_uses_weekly_counts_for_times_per_week_cadence(db_sessi
     assert state.weekly_positive_count == 2
     assert state.day_status == "missing"
     assert state.due_reason == "weekly target needs completion today (2/3 done)"
+
+
+async def test_week_read_model_returns_monday_to_sunday_evidence(db_session) -> None:
+    now = datetime(2026, 6, 20, 21, 0, tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        for created_at in (
+            datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+            datetime(2026, 6, 17, 10, 0, tzinfo=timezone.utc),
+            datetime(2026, 6, 20, 10, 0, tzinfo=timezone.utc),
+        ):
+            log = Log(telegram_user_id=USER_ID, text="did leetcode", created_at=created_at)
+            session.add(log)
+            await session.flush()
+            session.add(ExtractedFacts(log_id=log.id, habits=["leetcode"], adherence="yes"))
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        states = await get_habit_week_states(session, USER_ID, [_plan("leetcode")], now)
+
+    week = states[0]
+    assert [day.weekday for day in week.days] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    assert [day.label for day in week.days] == ["M", "T", "W", "T", "F", "S", "S"]
+    assert [day.status for day in week.days] == [
+        "done",
+        "missing",
+        "done",
+        "missing",
+        "missing",
+        "done",
+        "unknown",
+    ]
+    assert week.done_count == 3
+    assert week.target_count == 7

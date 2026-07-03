@@ -6,13 +6,12 @@ import {
   Cell,
   List,
   Placeholder,
-  Progress,
   Section,
   Spinner,
   Title,
 } from '@telegram-apps/telegram-ui'
 import { miniApp, useSignal } from '@telegram-apps/sdk-react'
-import { fetchDashboard, levelProgress, type DashboardData } from './api'
+import { fetchDashboard, type DashboardData, type DashboardHabit } from './api'
 
 export default function App() {
   const isDark = useSignal(miniApp.isDark)
@@ -34,6 +33,9 @@ export default function App() {
     dashboard?.habits.filter((habit) => habit.today_status === 'unknown').length ?? 0
   const todayNotDue =
     dashboard?.habits.filter((habit) => habit.today_status === 'not_due').length ?? 0
+  const weeklyDone = dashboard?.habits.reduce((sum, habit) => sum + habit.weekly_done_count, 0) ?? 0
+  const weeklyTarget =
+    dashboard?.habits.reduce((sum, habit) => sum + habit.weekly_target_count, 0) ?? 0
   const recentInterventions = dashboard?.recent_interventions.length ?? 0
 
   return (
@@ -51,8 +53,7 @@ export default function App() {
               Dashboard
             </Title>
             <Caption level="1" style={{ color: 'var(--tg-theme-hint-color, #888)' }}>
-              Level {dashboard.progress.level} · {dashboard.progress.xp} XP ·{' '}
-              {dashboard.progress.xp_to_next_level} to next
+              {weeklyDone}/{weeklyTarget} habit days done this week
             </Caption>
 
             <div className="summary-grid">
@@ -69,26 +70,14 @@ export default function App() {
                 <span className="summary-label">still due</span>
               </div>
               <div className="summary-tile">
-                <span className="summary-value">{recentInterventions}</span>
-                <span className="summary-label">interventions</span>
+                <span className="summary-value">{todayNotDue}</span>
+                <span className="summary-label">not due</span>
               </div>
             </div>
           </div>
 
           <List>
-            <Section header="Today">
-              <Cell subtitle="Overall progress" after={<Caption>{dashboard.progress.xp} XP</Caption>}>
-                Level {dashboard.progress.level}
-              </Cell>
-              <div style={{ padding: '0 22px 14px' }}>
-                <Progress value={levelProgress(dashboard.progress.level, dashboard.progress.xp)} />
-              </div>
-              <Cell subtitle="Due later" after={<Caption>{todayNotDue} not due</Caption>}>
-                Review state
-              </Cell>
-            </Section>
-
-            <Section header="Habits">
+            <Section header="This week">
               {dashboard.habits.length === 0 ? (
                 <Placeholder description="No habits are configured yet." />
               ) : (
@@ -96,7 +85,7 @@ export default function App() {
                   <div key={`${habit.category}:${habit.name}`} className="habit-row">
                     <Cell
                       before={<Avatar size={40}>{habit.name.charAt(0).toUpperCase()}</Avatar>}
-                      subtitle={`${habit.category} · ${habit.cadence_type.split('_').join(' ')}`}
+                      subtitle={`${habit.category} · ${habit.cadence_summary}`}
                       after={
                         <span className={`status-pill status-${habit.today_status}`}>
                           {habit.today_status.split('_').join(' ')}
@@ -105,8 +94,25 @@ export default function App() {
                     >
                       <span style={{ textTransform: 'capitalize' }}>{habit.name}</span>
                     </Cell>
-                    <div style={{ padding: '0 22px 14px 76px' }}>
-                      <Progress value={levelProgress(habit.level, habit.xp)} />
+                    <div className="habit-week">
+                      <div className="week-markers" aria-label={`${habit.name} weekly evidence`}>
+                        {habit.week.map((day) => (
+                          <span
+                            key={day.date}
+                            className={`week-marker status-${day.status}`}
+                            title={`${weekdayName(day.weekday)} ${day.date}: ${formatStatus(day.status)}`}
+                            aria-label={`${weekdayName(day.weekday)} ${day.date}: ${formatStatus(
+                              day.status,
+                            )}`}
+                          >
+                            <span className="marker-dot" aria-hidden="true" />
+                            <span className="marker-label">{day.label}</span>
+                          </span>
+                        ))}
+                      </div>
+                      <Caption level="2" className="weekly-count">
+                        {formatWeeklyCount(habit)}
+                      </Caption>
                       <Caption level="2" style={{ display: 'block', marginTop: 6 }}>
                         {habit.success_condition}
                       </Caption>
@@ -167,6 +173,11 @@ export default function App() {
                   </Cell>
                 ))
               )}
+              {recentInterventions > 0 ? (
+                <Caption level="2" className="section-count">
+                  {recentInterventions} recorded
+                </Caption>
+              ) : null}
             </Section>
           </List>
         </div>
@@ -180,6 +191,30 @@ function formatLogMeta(log: { habits: string[]; adherence: string | null; create
   if (log.adherence) parts.push(log.adherence)
   if (log.habits.length > 0) parts.push(log.habits.join(', '))
   return parts.join(' · ')
+}
+
+function formatWeeklyCount(habit: DashboardHabit): string {
+  if (habit.cadence_type === 'times_per_week') {
+    return `${habit.weekly_done_count}/${habit.weekly_target_count} this week`
+  }
+  return `${habit.weekly_done_count}/${habit.weekly_target_count} days`
+}
+
+function formatStatus(status: string): string {
+  return status.split('_').join(' ')
+}
+
+function weekdayName(value: string): string {
+  const names: Record<string, string> = {
+    mon: 'Monday',
+    tue: 'Tuesday',
+    wed: 'Wednesday',
+    thu: 'Thursday',
+    fri: 'Friday',
+    sat: 'Saturday',
+    sun: 'Sunday',
+  }
+  return names[value] ?? value
 }
 
 function formatDate(value: string): string {

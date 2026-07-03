@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel
-from sqlalchemy import and_, desc, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_app_timezone
@@ -10,28 +10,42 @@ from app.db.models import (
     ExtractedFacts,
     HabitCategory,
     HabitPlan,
-    HabitProgress,
     Intervention,
     Log,
 )
-from app.gamification.stats import UserStats, get_user_stats
 from app.habits.evidence import EffectiveEvidenceLedger, build_effective_evidence_ledger
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
-from app.habits.state import HabitReadState, get_dashboard_habit_rows
+from app.habits.state import (
+    HabitReadState,
+    HabitWeekState,
+    get_dashboard_habit_rows,
+    get_habit_week_states,
+)
 
 DashboardHabitStatus = Literal["done", "missing", "not_due", "unknown"]
+
+
+class DashboardHabitDay(BaseModel):
+    date: date
+    weekday: str
+    label: str
+    status: DashboardHabitStatus
+    is_corrected: bool = False
+    is_checkin_answer: bool = False
 
 
 class DashboardHabit(BaseModel):
     name: str
     category: str
-    level: int
-    xp: int
     cadence_type: str
     cadence_value: Any = None
+    cadence_summary: str
     success_condition: str
     today_status: DashboardHabitStatus
     is_corrected_today: bool = False
+    week: list[DashboardHabitDay]
+    weekly_done_count: int
+    weekly_target_count: int
 
 
 class DashboardLog(BaseModel):
@@ -57,7 +71,6 @@ class DashboardIntervention(BaseModel):
 
 
 class DashboardData(BaseModel):
-    progress: UserStats
     habits: list[DashboardHabit]
     recent_logs: list[DashboardLog]
     recent_interventions: list[DashboardIntervention]
@@ -70,14 +83,23 @@ async def get_dashboard_data(
 ) -> DashboardData:
     current = now or utcnow()
     await get_habit_plan_context(session, telegram_user_id)
-    progress = await get_user_stats(telegram_user_id, session)
     plans = await _load_habit_plans(session, telegram_user_id)
+    plan_contexts = list(plans)
     habit_states = {
         state.habit_name: state
         for state in await get_dashboard_habit_rows(
             session,
             telegram_user_id,
-            [plan for plan, _ in plans],
+            plan_contexts,
+            _dashboard_wall_time(current),
+        )
+    }
+    week_states = {
+        state.habit_name: state
+        for state in await get_habit_week_states(
+            session,
+            telegram_user_id,
+            plan_contexts,
             _dashboard_wall_time(current),
         )
     }
@@ -86,10 +108,9 @@ async def get_dashboard_data(
     recent_interventions = await _load_recent_interventions(session, telegram_user_id)
 
     return DashboardData(
-        progress=progress,
         habits=[
-            _build_habit_row(plan, habit_progress, habit_states[plan.habit_name])
-            for plan, habit_progress in plans
+            _build_habit_row(plan, habit_states[plan.habit_name], week_states[plan.habit_name])
+            for plan in plan_contexts
         ],
         recent_logs=_attach_corrections_to_logs(recent_logs, recent_corrections),
         recent_interventions=recent_interventions,
@@ -98,38 +119,28 @@ async def get_dashboard_data(
 
 async def _load_habit_plans(
     session: AsyncSession, telegram_user_id: int
-) -> list[tuple[HabitPlanContext, HabitProgress | None]]:
+) -> list[HabitPlanContext]:
     result = await session.execute(
-        select(HabitPlan, HabitCategory.name, HabitProgress)
+        select(HabitPlan, HabitCategory.name)
         .join(HabitCategory, HabitCategory.id == HabitPlan.category_id)
-        .outerjoin(
-            HabitProgress,
-            and_(
-                HabitProgress.telegram_user_id == HabitPlan.telegram_user_id,
-                HabitProgress.habit_name == HabitPlan.habit_name,
-            ),
-        )
         .where(HabitPlan.telegram_user_id == telegram_user_id)
         .order_by(HabitCategory.name, HabitPlan.habit_name)
     )
-    rows: list[tuple[HabitPlanContext, HabitProgress | None]] = []
-    for plan, category_name, habit_progress in result.all():
+    rows: list[HabitPlanContext] = []
+    for plan, category_name in result.all():
         rows.append(
-            (
-                HabitPlanContext(
-                    category_name=category_name,
-                    habit_name=plan.habit_name,
-                    direction=plan.direction,
-                    cadence_type=plan.cadence_type,
-                    cadence_value=plan.cadence_value,
-                    success_condition=plan.success_condition,
-                    habit_aliases=plan.habit_aliases or [],
-                    known_triggers=plan.known_triggers or [],
-                    goal=plan.goal,
-                    fallback_checkin_enabled=plan.fallback_checkin_enabled,
-                    expected_evidence_window=plan.expected_evidence_window,
-                ),
-                habit_progress,
+            HabitPlanContext(
+                category_name=category_name,
+                habit_name=plan.habit_name,
+                direction=plan.direction,
+                cadence_type=plan.cadence_type,
+                cadence_value=plan.cadence_value,
+                success_condition=plan.success_condition,
+                habit_aliases=plan.habit_aliases or [],
+                known_triggers=plan.known_triggers or [],
+                goal=plan.goal,
+                fallback_checkin_enabled=plan.fallback_checkin_enabled,
+                expected_evidence_window=plan.expected_evidence_window,
             )
         )
     return rows
@@ -185,20 +196,43 @@ async def _load_recent_interventions(
 
 def _build_habit_row(
     plan: HabitPlanContext,
-    habit_progress: HabitProgress | None,
     state: HabitReadState,
+    week: HabitWeekState,
 ) -> DashboardHabit:
     return DashboardHabit(
         name=plan.habit_name,
         category=plan.category_name,
-        level=habit_progress.level if habit_progress else 1,
-        xp=habit_progress.xp if habit_progress else 0,
         cadence_type=plan.cadence_type,
         cadence_value=plan.cadence_value,
+        cadence_summary=_format_cadence(plan),
         success_condition=plan.success_condition,
         today_status=state.day_status,
         is_corrected_today=state.is_corrected,
+        week=[
+            DashboardHabitDay(
+                date=day.date,
+                weekday=day.weekday,
+                label=day.label,
+                status=day.status,
+                is_corrected=day.is_corrected,
+                is_checkin_answer=day.is_checkin_answer,
+            )
+            for day in week.days
+        ],
+        weekly_done_count=week.done_count,
+        weekly_target_count=week.target_count,
     )
+
+
+def _format_cadence(plan: HabitPlanContext) -> str:
+    if plan.cadence_type == "daily":
+        return "daily"
+    if plan.cadence_type == "times_per_week":
+        return f"{plan.cadence_value}x/week"
+    if plan.cadence_type == "specific_weekdays":
+        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
+        return "/".join(str(day).title() for day in values) if values else "specific weekdays"
+    return plan.cadence_type.replace("_", " ")
 
 
 def _attach_corrections_to_logs(

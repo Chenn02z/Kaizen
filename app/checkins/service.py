@@ -249,10 +249,6 @@ def _build_confirmation(
     ]
     if changed:
         parts.append("Effective state changed: " + "; ".join(changed) + ".")
-    if xp_delta > 0:
-        parts.append(f"XP +{xp_delta}.")
-    elif xp_delta < 0:
-        parts.append(f"XP {xp_delta}.")
     return " ".join(parts)
 
 

@@ -1,4 +1,4 @@
-# Milestone 13 - Corpus expansion and retrieval sharpness
+# Milestone 14 - Corpus expansion and retrieval sharpness
 
 **Goal:** Expand Kaizen's self-authored `lesson` corpus from broad technique
 notes into a larger set of situation-specific lessons, so retrieved advice fits

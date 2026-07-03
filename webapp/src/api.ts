@@ -1,28 +1,26 @@
-export interface HabitStats {
-  name: string
-  level: number
-  xp: number
-}
-
-export interface UserStats {
-  level: number
-  xp: number
-  xp_to_next_level: number
-  habits: HabitStats[]
-}
-
 export type DashboardHabitStatus = 'done' | 'missing' | 'not_due' | 'unknown'
+
+export interface DashboardHabitDay {
+  date: string
+  weekday: string
+  label: string
+  status: DashboardHabitStatus
+  is_corrected: boolean
+  is_checkin_answer: boolean
+}
 
 export interface DashboardHabit {
   name: string
   category: string
-  level: number
-  xp: number
   cadence_type: string
   cadence_value: string | number | string[] | null
+  cadence_summary: string
   success_condition: string
   today_status: DashboardHabitStatus
   is_corrected_today: boolean
+  week: DashboardHabitDay[]
+  weekly_done_count: number
+  weekly_target_count: number
 }
 
 export interface DashboardLog {
@@ -48,7 +46,6 @@ export interface DashboardIntervention {
 }
 
 export interface DashboardData {
-  progress: UserStats
   habits: DashboardHabit[]
   recent_logs: DashboardLog[]
   recent_interventions: DashboardIntervention[]
@@ -67,12 +64,4 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`/dashboard returned ${res.status}`)
   return (await res.json()) as DashboardData
-}
-
-// XP curve mirrors the backend: level N spans [100*(N-1)^2, 100*N^2).
-export function levelProgress(level: number, xp: number): number {
-  const prev = 100 * (level - 1) * (level - 1)
-  const next = 100 * level * level
-  if (next <= prev) return 100
-  return Math.max(0, Math.min(100, Math.round(((xp - prev) / (next - prev)) * 100)))
 }

@@ -1,6 +1,6 @@
 # Kaizen Product Requirements
 
-Owner: solo builder | Status: in progress | Last updated: 2026-06-18
+Owner: solo builder | Status: in progress | Last updated: 2026-07-04
 
 This is the product contract for Kaizen. Milestone execution lives in
 `docs/milestones/`; canonical terminology lives in `docs/CONTEXT.md`.
@@ -50,10 +50,12 @@ must all be load-bearing.
   to intervene. It must respect `quiet hours`, enforce a daily cap, and stay
   silent when appropriate. Proactive ticks may use retrieved `lesson`s to choose
   the intervention strategy, but they must not become generic lesson broadcasts.
-- The Telegram Mini App is the read-only dashboard for today's habit state,
-  recent logs, progress, and recorded `intervention`s.
-- XP and levels are motivational feedback, but they are secondary to the core
-  accountability loop: log, understand, reflect, intervene.
+- The Telegram Mini App is the read-only dashboard for weekly habit evidence,
+  today's habit state, recent logs, and recorded `intervention`s.
+- Progress feedback is secondary to the core accountability loop: log,
+  understand, reflect, intervene. Weekly habit evidence is the primary progress
+  surface; XP and levels may remain as internal compatibility infrastructure
+  but should not drive the dashboard hierarchy.
 
 ## Technical Requirements
 
@@ -82,7 +84,7 @@ must all be load-bearing.
 - Scheduler: run app-local ticks outside quiet hours, record all check-ins,
   nudges, and silence decisions in `interventions`.
 - Dashboard: backend read models, not React-only inference, derive habit status
-  from persisted logs, extracted facts, habit plans, progress, and
+  from persisted logs, extracted facts, habit plans, evidence overrides, and
   interventions.
 - Observability: Langfuse traces model calls with latency, token usage, and
   cost; evals provide reproducible quality signals.

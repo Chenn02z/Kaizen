@@ -202,10 +202,6 @@ def _build_confirmation(
         parts.append(
             f"Effective state changed from {old_status or 'none'} to {new_status or 'none'}."
         )
-    if xp_delta > 0:
-        parts.append(f"XP +{xp_delta}.")
-    elif xp_delta < 0:
-        parts.append(f"XP {xp_delta}.")
     return " ".join(parts)
 
 

@@ -14,7 +14,6 @@ from app.db.models import Log
 from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
-from app.gamification.xp import XPResult
 from app.habits.commands import (
     handle_habit_flow_message,
     start_habit_add,
@@ -176,7 +175,6 @@ async def _handle_habit_command(
 
 async def _handle_log_message(message: TelegramIntakeMessage) -> IntakeOutcome:
     facts: ExtractedFacts | None = None
-    xp_result: XPResult | None = None
     async with AsyncSessionLocal() as session:
         log = Log(telegram_user_id=message.telegram_user_id, text=message.text)
         session.add(log)
@@ -196,17 +194,7 @@ async def _handle_log_message(message: TelegramIntakeMessage) -> IntakeOutcome:
                 )
             )
             await session.flush()
-            progress = await recompute_progress_from_effective_state(
-                session, message.telegram_user_id
-            )
-            if progress.xp_delta != 0 or progress.new_level != progress.old_level:
-                xp_result = XPResult(
-                    xp_gained=progress.xp_delta,
-                    new_total_xp=progress.new_total_xp,
-                    old_level=progress.old_level,
-                    new_level=progress.new_level,
-                    levelled_up=progress.new_level > progress.old_level,
-                )
+            await recompute_progress_from_effective_state(session, message.telegram_user_id)
             await asyncio.get_running_loop().run_in_executor(
                 None, store_facts, facts, message.text, message.telegram_user_id
             )
@@ -227,11 +215,6 @@ async def _handle_log_message(message: TelegramIntakeMessage) -> IntakeOutcome:
             )
     except Exception:
         logger.exception("reply generation failed")
-
-    if xp_result and xp_result.xp_gained > 0:
-        reply_text += f"\n\n+{xp_result.xp_gained} XP · Level {xp_result.new_level} \U0001f5e1️"
-        if xp_result.levelled_up:
-            reply_text += f"\n⬆️ LEVEL UP — you are now Level {xp_result.new_level}!"
 
     return IntakeOutcome.reply(chat_id=message.chat_id, text=reply_text)
 

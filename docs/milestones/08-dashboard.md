@@ -33,9 +33,10 @@ truth.
   proactive `nudge`s.
 - V1 dashboard is read-only. It can reveal habit-plan state, but it must not
   create, edit, reorder, or delete habit plans.
-- XP remains visible, but it is not the dashboard's primary information
-  architecture. The first screen should answer: what is due, what is done, what
-  is missing, and what happened recently?
+- XP is inherited from Milestone 4, but it is not the dashboard's primary
+  information architecture. The first screen should answer: what is due, what
+  is done, what is missing, and what happened recently? Milestone 13 evaluates
+  replacing XP-first progress with weekly habit evidence.
 
 ## Dashboard read model
 
@@ -45,9 +46,11 @@ keeps the existing `/me` contract stable for current tests.
 
 The response should include:
 
-- Overall progress: level, XP, XP to next level.
-- Habit progress: habit name, category, level, XP, cadence, and today's status
-  (`done`, `missing`, `not_due`, or `unknown`).
+- Overall progress: current progress fields from the implemented backend,
+  including XP only while Milestone 13 has not deprecated or removed it.
+- Habit progress: habit name, category, cadence, today's status (`done`,
+  `missing`, `not_due`, or `unknown`), and XP/level only while Milestone 13 has
+  not deprecated or removed them.
 - Recent logs: newest-first text, timestamp, extracted habits, adherence, mood,
   trigger, and context.
 - Recent interventions: newest-first kind, timestamp, reason, technique,

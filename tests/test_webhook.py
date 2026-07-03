@@ -293,7 +293,7 @@ async def test_single_habit_checkin_yes_updates_state_without_log(
     assert await _override_count() == 1
     mock_send.assert_awaited_once()
     assert "read=yes" in mock_send.await_args.kwargs["text"]
-    assert "XP +50" in mock_send.await_args.kwargs["text"]
+    assert "XP" not in mock_send.await_args.kwargs["text"]
 
     async with AsyncSessionLocal() as session:
         override = (await session.execute(select(HabitEvidenceOverride))).scalar_one()
@@ -314,6 +314,9 @@ async def test_single_habit_checkin_yes_updates_state_without_log(
     habits = {habit.name: habit for habit in dashboard.habits}
     assert habits["read"].today_status == "done"
     assert habits["read"].is_corrected_today is True
+    today = next(day for day in habits["read"].week if day.date == now.date())
+    assert today.status == "done"
+    assert today.is_checkin_answer is True
     assert dashboard.recent_interventions[0].kind == "check-in"
 
 
