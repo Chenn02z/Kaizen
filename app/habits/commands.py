@@ -11,6 +11,7 @@ from app.db.models import (
     HabitPlan,
     HabitProgress,
 )
+from app.habits.cadence import format_cadence
 from app.habits.plan import ensure_default_habit_plan
 
 DEFAULT_EVIDENCE_WINDOW = "20:00"
@@ -669,7 +670,7 @@ def _render_add_summary(draft: HabitAddDraft) -> str:
         "Confirm this habit? yes/no\n"
         f"- name: {draft.name}\n"
         f"- category: {draft.category_name}{category_note}\n"
-        f"- cadence: {_format_cadence(draft.cadence)}\n"
+        f"- cadence: {format_cadence(draft.cadence)}\n"
         f"- success: {draft.success_condition}\n"
         f"- aliases: {aliases}"
     )
@@ -694,23 +695,10 @@ def _render_edit_summary(draft: HabitEditDraft) -> str:
         "Updated draft. Save it? yes/no, or send another field update.\n"
         f"- name: {draft.name}\n"
         f"- category: {draft.category_name}{category_note}\n"
-        f"- cadence: {_format_cadence(draft.cadence)}\n"
+        f"- cadence: {format_cadence(draft.cadence)}\n"
         f"- success: {draft.success_condition}\n"
         f"- aliases: {aliases}"
     )
-
-
-def _format_cadence(cadence: CadenceSpec | None) -> str:
-    if cadence is None:
-        return "unset"
-    if cadence.cadence_type == "daily":
-        return "daily"
-    if cadence.cadence_type == "times_per_week":
-        return f"{cadence.cadence_value}x/week"
-    if cadence.cadence_type == "specific_weekdays":
-        values = cadence.cadence_value if isinstance(cadence.cadence_value, list) else []
-        return ", ".join(str(day) for day in values)
-    return cadence.cadence_type
 
 
 def _clean_text(value: str) -> str:

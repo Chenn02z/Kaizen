@@ -13,6 +13,7 @@ from app.db.models import (
     Intervention,
     Log,
 )
+from app.habits.cadence import format_cadence
 from app.habits.evidence import EffectiveEvidenceLedger, build_effective_evidence_ledger
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
 from app.habits.state import (
@@ -119,9 +120,7 @@ async def get_dashboard_data(
     )
 
 
-async def _load_habit_plans(
-    session: AsyncSession, telegram_user_id: int
-) -> list[HabitPlanContext]:
+async def _load_habit_plans(session: AsyncSession, telegram_user_id: int) -> list[HabitPlanContext]:
     result = await session.execute(
         select(HabitPlan, HabitCategory.name)
         .join(HabitCategory, HabitCategory.id == HabitPlan.category_id)
@@ -209,7 +208,7 @@ def _build_habit_row(
         category=plan.category_name,
         cadence_type=plan.cadence_type,
         cadence_value=plan.cadence_value,
-        cadence_summary=_format_cadence(plan),
+        cadence_summary=format_cadence(plan),
         success_condition=plan.success_condition,
         today_status=state.day_status,
         is_corrected_today=state.is_corrected,
@@ -229,17 +228,6 @@ def _build_habit_row(
     )
 
 
-def _format_cadence(plan: HabitPlanContext) -> str:
-    if plan.cadence_type == "daily":
-        return "daily"
-    if plan.cadence_type == "times_per_week":
-        return f"{plan.cadence_value}x/week"
-    if plan.cadence_type == "specific_weekdays":
-        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
-        return "/".join(str(day).title() for day in values) if values else "specific weekdays"
-    return plan.cadence_type.replace("_", " ")
-
-
 def _attach_corrections_to_logs(
     logs: list[DashboardLog], ledger: EffectiveEvidenceLedger
 ) -> list[DashboardLog]:
@@ -247,10 +235,7 @@ def _attach_corrections_to_logs(
         entry.log_id: [state.habit_name for state in entry.effective_habits if state.corrected]
         for entry in ledger.logs
     }
-    return [
-        log.model_copy(update={"corrected_habits": log_map.get(log.id, [])})
-        for log in logs
-    ]
+    return [log.model_copy(update={"corrected_habits": log_map.get(log.id, [])}) for log in logs]
 
 
 def utcnow() -> datetime:

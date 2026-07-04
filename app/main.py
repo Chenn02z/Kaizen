@@ -144,9 +144,7 @@ async def miniapp() -> str:
             status_code=503,
             detail="Mini App not built. Run `npm run build` in webapp/.",
         )
-    return index.read_text(encoding="utf-8").replace(
-        "%%MINIAPP_SECRET%%", settings.miniapp_secret
-    )
+    return index.read_text(encoding="utf-8").replace("%%MINIAPP_SECRET%%", settings.miniapp_secret)
 
 
 @app.post("/scheduler/tick")

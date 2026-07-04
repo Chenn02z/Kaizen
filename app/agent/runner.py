@@ -132,9 +132,7 @@ async def run_tick(telegram_user_id: int, now: datetime | None = None) -> None:
                 has_checkin = False
                 habit_state_summary = ""
             else:
-                due_habits = await due_habits_missing_evidence(
-                    session, telegram_user_id, now
-                )
+                due_habits = await due_habits_missing_evidence(session, telegram_user_id, now)
                 has_checkin = await has_fallback_checkin_today(
                     session, telegram_user_id, today=today
                 )

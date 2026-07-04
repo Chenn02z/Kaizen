@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_app_timezone
 from app.db.models import HabitCategory, HabitPlan, Intervention
 from app.habits.state import get_due_habits
+from app.shared.datetime import app_datetime, day_start
 
 _DEFAULT_WINDOW = "20:00"
 
@@ -186,7 +187,7 @@ async def due_habits_missing_evidence(
     telegram_user_id: int,
     now: datetime | None = None,
 ) -> list[DueHabit]:
-    current = _app_datetime(now)
+    current = app_datetime(now)
     plans = await get_habit_plan_context(session, telegram_user_id)
     due_states = await get_due_habits(session, telegram_user_id, plans, current)
     return [
@@ -210,8 +211,8 @@ async def has_fallback_checkin_today(
         select(Intervention.id)
         .where(Intervention.telegram_user_id == telegram_user_id)
         .where(Intervention.kind == "check-in")
-        .where(Intervention.created_at >= _day_start(target))
-        .where(Intervention.created_at < _day_start(target + timedelta(days=1)))
+        .where(Intervention.created_at >= day_start(target))
+        .where(Intervention.created_at < day_start(target + timedelta(days=1)))
         .limit(1)
     )
     return result.scalar_one_or_none() is not None
@@ -224,15 +225,3 @@ def build_fallback_checkin_message(due_habits: Sequence[DueHabit]) -> str:
     else:
         habit_text = ", ".join(names[:-1]) + f", and {names[-1]}"
     return f"Quick check-in: did you complete {habit_text} today? Reply yes, partial, or no."
-
-
-def _day_start(day: date) -> datetime:
-    return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
-
-
-def _app_datetime(value: datetime | None) -> datetime:
-    if value is None:
-        return datetime.now(get_app_timezone())
-    if value.tzinfo is None:
-        return value.replace(tzinfo=get_app_timezone())
-    return value.astimezone(get_app_timezone())

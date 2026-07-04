@@ -4,12 +4,12 @@ from typing import Any, Literal, Protocol, Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_app_timezone
 from app.habits.evidence import (
     EffectiveHabitState,
     build_effective_evidence_ledger,
     is_positive_status,
 )
+from app.shared.datetime import app_datetime
 
 HabitDayStatus = Literal["done", "missing", "not_due", "unknown"]
 AgentHabitStatus = Literal["done", "missing", "not_due"]
@@ -73,7 +73,7 @@ async def get_habit_day_states(
     plans: Sequence[HabitPlanRead],
     now: datetime | None = None,
 ) -> list[HabitReadState]:
-    current = _app_datetime(now)
+    current = app_datetime(now)
     target_day = current.date()
     ledger = await build_effective_evidence_ledger(
         session,
@@ -102,7 +102,7 @@ async def get_due_habits(
     plans: Sequence[HabitPlanRead],
     now: datetime | None = None,
 ) -> list[HabitReadState]:
-    current = _app_datetime(now)
+    current = app_datetime(now)
     rows = await get_habit_day_states(session, telegram_user_id, plans, current)
     return [row for row in rows if row.fallback_checkin_due]
 
@@ -122,7 +122,7 @@ async def get_habit_week_states(
     plans: Sequence[HabitPlanRead],
     now: datetime | None = None,
 ) -> list[HabitWeekState]:
-    current = _app_datetime(now)
+    current = app_datetime(now)
     today = current.date()
     week_start = _week_start(today)
     week_end = week_start + timedelta(days=6)
@@ -241,7 +241,7 @@ def habit_due_on_date(plan: HabitPlanRead, target_day: date) -> bool:
 
 
 def fallback_window_has_arrived(current: datetime, expected_window: str | None = None) -> bool:
-    return _app_datetime(current).time() >= _parse_window(expected_window or _DEFAULT_WINDOW)
+    return app_datetime(current).time() >= _parse_window(expected_window or _DEFAULT_WINDOW)
 
 
 def _build_habit_read_state(
@@ -317,9 +317,7 @@ def _build_habit_week_day_state(
         status = "missing"
     elif target_day == today:
         status = (
-            "missing"
-            if current_time >= _parse_window(plan.expected_evidence_window)
-            else "unknown"
+            "missing" if current_time >= _parse_window(plan.expected_evidence_window) else "unknown"
         )
     else:
         status = "unknown"
@@ -372,11 +370,3 @@ def _parse_window(value: str | None) -> time:
         return time(hour=20)
     hour, minute = value.split(":", maxsplit=1)
     return time(hour=int(hour), minute=int(minute))
-
-
-def _app_datetime(value: datetime | None) -> datetime:
-    if value is None:
-        return datetime.now(get_app_timezone())
-    if value.tzinfo is None:
-        return value.replace(tzinfo=get_app_timezone())
-    return value.astimezone(get_app_timezone())

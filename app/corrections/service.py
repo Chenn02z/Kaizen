@@ -11,6 +11,7 @@ from app.db.models import ExtractedFacts, HabitEvidenceOverride, Log
 from app.gamification.xp import XPResult
 from app.habits.evidence import get_effective_habit_state, recompute_progress_from_effective_state
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
+from app.shared.datetime import app_date, app_datetime
 
 
 class CorrectionOutcome(BaseModel):
@@ -32,9 +33,7 @@ async def handle_correction_message(
     if intent is None:
         return None
 
-    resolution = await _resolve_target(
-        session, telegram_user_id, intent, plans, _app_datetime(now)
-    )
+    resolution = await _resolve_target(session, telegram_user_id, intent, plans, app_datetime(now))
     if resolution.follow_up is not None:
         return CorrectionOutcome(handled=True, applied=False, reply_text=resolution.follow_up)
 
@@ -112,12 +111,12 @@ async def _resolve_target(
             options = ", ".join(plan.habit_name for plan in plans)
             return _Resolution(
                 habit_name="",
-                target_date=_app_date(now),
+                target_date=app_date(now),
                 follow_up=f"I couldn't match that habit. Say the habit name directly: {options}.",
             )
         return _Resolution(
             habit_name="",
-            target_date=_app_date(now),
+            target_date=app_date(now),
             follow_up=(
                 "Which habit should I correct? "
                 "Say something like 'count my last log as partial for gym'."
@@ -125,21 +124,20 @@ async def _resolve_target(
         )
 
     if intent.reference == CorrectionReference.today:
-        return _Resolution(habit_name=habit_name, target_date=_app_date(now))
+        return _Resolution(habit_name=habit_name, target_date=app_date(now))
 
     if recent is None:
         return _Resolution(
             habit_name="",
-            target_date=_app_date(now),
+            target_date=app_date(now),
             follow_up=(
-                "I couldn't find a recent log to correct yet. "
-                "Send the log first, then correct it."
+                "I couldn't find a recent log to correct yet. Send the log first, then correct it."
             ),
         )
 
     return _Resolution(
         habit_name=habit_name,
-        target_date=_app_date(recent.created_at),
+        target_date=app_date(recent.created_at),
         log_id=recent.id,
     )
 
@@ -195,8 +193,7 @@ def _build_confirmation(
     xp_delta: int,
 ) -> str:
     parts = [
-        f"Got it. I updated {habit_name} for {target_date.isoformat()} "
-        f"to {override_status.value}."
+        f"Got it. I updated {habit_name} for {target_date.isoformat()} to {override_status.value}."
     ]
     if old_status != new_status:
         parts.append(
@@ -207,15 +204,3 @@ def _build_confirmation(
 
 def utcnow() -> datetime:
     return datetime.now(get_app_timezone())
-
-
-def _app_datetime(value: datetime | None) -> datetime:
-    if value is None:
-        return datetime.now(get_app_timezone())
-    if value.tzinfo is None:
-        return value.replace(tzinfo=get_app_timezone())
-    return value.astimezone(get_app_timezone())
-
-
-def _app_date(value: datetime) -> date:
-    return _app_datetime(value).date()

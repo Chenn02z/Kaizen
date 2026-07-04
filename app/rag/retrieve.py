@@ -63,8 +63,7 @@ async def _rerank(query: str, candidates: list[CorpusChunk], top_n: int) -> list
         if start == -1 or end <= start:
             raise ValueError("no JSON array in reranker output")
         scores = [
-            _RerankScore.model_validate(item)
-            for item in json.loads(text_content[start : end + 1])
+            _RerankScore.model_validate(item) for item in json.loads(text_content[start : end + 1])
         ]
         indexed = {s.index: s.score for s in scores}
         pos = {id(c): i for i, c in enumerate(candidates)}

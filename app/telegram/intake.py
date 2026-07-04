@@ -14,6 +14,7 @@ from app.db.models import Log
 from app.db.session import AsyncSessionLocal
 from app.extract.extractor import extract
 from app.extract.schema import ExtractedFacts
+from app.habits.cadence import format_cadence
 from app.habits.commands import (
     handle_habit_flow_message,
     start_habit_add,
@@ -249,21 +250,10 @@ def _render_habit_plan_summary(plans: list[HabitPlanContext]) -> str:
     for category_name in sorted(grouped):
         lines = [category_name.upper()]
         for plan in sorted(grouped[category_name], key=lambda item: item.habit_name):
-            lines.append(
-                f"- {plan.habit_name}: {_format_cadence(plan)} - {plan.success_condition}"
-            )
+            lines.append(f"- {plan.habit_name}: {format_cadence(plan)} - {plan.success_condition}")
             aliases = ", ".join(plan.habit_aliases) if plan.habit_aliases else "none"
             lines.append(f"  aliases: {aliases}")
         sections.append("\n".join(lines))
     return "\n\n".join(sections)
 
-
-def _format_cadence(plan: HabitPlanContext) -> str:
-    if plan.cadence_type == "daily":
-        return "daily"
-    if plan.cadence_type == "times_per_week":
-        return f"{plan.cadence_value}x/week"
-    if plan.cadence_type == "specific_weekdays":
-        values = plan.cadence_value if isinstance(plan.cadence_value, list) else []
-        return ", ".join(str(day) for day in values) if values else "specific weekdays"
     return plan.cadence_type

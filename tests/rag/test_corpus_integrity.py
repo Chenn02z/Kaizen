@@ -29,9 +29,7 @@ def test_corpus_entries_map_to_at_least_one_technique() -> None:
     for path in sorted(CORPUS_DIR.glob("*.md")):
         fields = _parse_lesson_fields(path.read_text())
         techniques = [
-            item.strip()
-            for item in fields.get("technique", "").split(",")
-            if item.strip()
+            item.strip() for item in fields.get("technique", "").split(",") if item.strip()
         ]
         if not techniques:
             missing.append(path.name)
@@ -57,11 +55,7 @@ def _parse_lesson_fields(content: str) -> dict[str, str]:
         line = raw_line.strip()
         lower = line.lower()
         field_name = next(
-            (
-                field
-                for field in REQUIRED_FIELDS
-                if lower.startswith(f"{field}:")
-            ),
+            (field for field in REQUIRED_FIELDS if lower.startswith(f"{field}:")),
             None,
         )
         if field_name is not None:

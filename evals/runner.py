@@ -57,7 +57,7 @@ def _print_table(metrics: dict[str, float], rerank: bool) -> None:
     label = "rerank=ON" if rerank else "rerank=OFF"
     print(f"\n=== Eval A — Reply quality ({label}, n={len(GOLDEN_SET)}) ===")
     print(f"  {'criterion':<15} {'pass-rate':>10}")
-    print(f"  {'-'*15} {'-'*10}")
+    print(f"  {'-' * 15} {'-' * 10}")
     for criterion, rate in metrics.items():
         pct = f"{rate * 100:.1f}%"
         print(f"  {criterion:<15} {pct:>10}")

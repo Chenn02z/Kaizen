@@ -4,7 +4,6 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_app_timezone
 from app.corrections.schema import OverrideStatus
 from app.db.models import (
     ExtractedFacts,
@@ -14,6 +13,7 @@ from app.db.models import (
     UserProgress,
 )
 from app.gamification.xp import level_for_xp
+from app.shared.datetime import app_date, day_start
 
 _POSITIVE_STATUSES = {OverrideStatus.yes.value, OverrideStatus.partial.value}
 _STATUS_XP = {
@@ -94,7 +94,7 @@ async def build_effective_evidence_ledger(
     logs: list[EffectiveLogEvidence] = []
 
     for log, facts in log_rows:
-        target_date = log.logged_date or _app_date(log.created_at)
+        target_date = log.logged_date or app_date(log.created_at)
         base_habits = list((facts.habits if facts else []) or [])
         candidate_habits = set(base_habits)
         candidate_habits.update(
@@ -123,7 +123,7 @@ async def build_effective_evidence_ledger(
             effective_habits.append(state)
             _merge_state(states_by_date, state)
 
-        effective_date = log.logged_date or _app_date(log.created_at)
+        effective_date = log.logged_date or app_date(log.created_at)
         logs.append(
             EffectiveLogEvidence(
                 log_id=log.id,
@@ -217,10 +217,14 @@ async def recompute_progress_from_effective_state(
     old_user.level = level_for_xp(total_xp)
 
     existing_habits = (
-        await session.execute(
-            select(HabitProgress).where(HabitProgress.telegram_user_id == telegram_user_id)
+        (
+            await session.execute(
+                select(HabitProgress).where(HabitProgress.telegram_user_id == telegram_user_id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     existing_by_name = {row.habit_name: row for row in existing_habits}
 
     for habit_name, xp in habit_xp.items():
@@ -286,7 +290,7 @@ async def _load_log_rows(
                 Log.logged_date >= start_date,
                 and_(
                     Log.logged_date.is_(None),
-                    Log.created_at >= _day_start(start_date),
+                    Log.created_at >= day_start(start_date),
                 ),
             )
         )
@@ -296,7 +300,7 @@ async def _load_log_rows(
                 Log.logged_date <= end_date,
                 and_(
                     Log.logged_date.is_(None),
-                    Log.created_at < _day_start(end_date + timedelta(days=1)),
+                    Log.created_at < day_start(end_date + timedelta(days=1)),
                 ),
             )
         )
@@ -366,13 +370,3 @@ def _merge_state(
 
 def _has_three_day_streak(positive_days: set[date], target_day: date) -> bool:
     return all(target_day - timedelta(days=offset) in positive_days for offset in range(1, 4))
-
-
-def _day_start(day: date) -> datetime:
-    return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
-
-
-def _app_date(value: datetime) -> date:
-    if value.tzinfo is None:
-        return value.date()
-    return value.astimezone(get_app_timezone()).date()

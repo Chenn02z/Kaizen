@@ -703,12 +703,16 @@ async def test_retrying_same_correction_keeps_progress_idempotent(
             )
         ).scalar_one()
         overrides = (
-            await session.execute(
-                select(HabitEvidenceOverride).where(
-                    HabitEvidenceOverride.telegram_user_id == ALLOWED_UID
+            (
+                await session.execute(
+                    select(HabitEvidenceOverride).where(
+                        HabitEvidenceOverride.telegram_user_id == ALLOWED_UID
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert progress.xp == 50
     assert progress.level == 1

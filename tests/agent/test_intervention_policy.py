@@ -71,8 +71,7 @@ async def test_policy_missing_due_habit_sends_checkin_without_llm_adapter() -> N
     assert decision.intervention_kind == "check-in"
     assert decision.reason == "fallback check-in: missing evidence for gym"
     assert (
-        decision.message
-        == "Quick check-in: did you complete gym today? Reply yes, partial, or no."
+        decision.message == "Quick check-in: did you complete gym today? Reply yes, partial, or no."
     )
     assert decision.due_habits == ["gym"]
     assert not called

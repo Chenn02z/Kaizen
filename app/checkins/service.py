@@ -7,11 +7,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_app_timezone
 from app.db.models import HabitEvidenceOverride, Intervention
 from app.gamification.xp import XPResult
 from app.habits.evidence import get_effective_habit_state, recompute_progress_from_effective_state
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
+from app.shared.datetime import app_datetime, day_start
 
 CHECKIN_ANSWER_REASON_PREFIX = "check-in answer"
 
@@ -48,7 +48,7 @@ async def handle_checkin_answer(
     text: str,
     now: datetime | None = None,
 ) -> CheckInOutcome | None:
-    current = _app_datetime(now)
+    current = app_datetime(now)
     plans = await get_habit_plan_context(session, telegram_user_id)
     checkin = await _latest_same_day_checkin(session, telegram_user_id, plans, current)
     if checkin is None:
@@ -178,8 +178,8 @@ async def _latest_same_day_checkin(
         select(Intervention)
         .where(Intervention.telegram_user_id == telegram_user_id)
         .where(Intervention.kind == "check-in")
-        .where(Intervention.created_at >= _day_start(target_date))
-        .where(Intervention.created_at < _day_start(target_date + timedelta(days=1)))
+        .where(Intervention.created_at >= day_start(target_date))
+        .where(Intervention.created_at < day_start(target_date + timedelta(days=1)))
         .order_by(desc(Intervention.created_at), desc(Intervention.id))
     )
     for intervention in result.scalars().all():
@@ -198,11 +198,7 @@ def _resolve_target_habits(
     plans: list[HabitPlanContext],
 ) -> list[str]:
     source = f"{intervention.reason} {intervention.message or ''}"
-    return [
-        plan.habit_name
-        for plan in plans
-        if _contains_term(source, plan.habit_name)
-    ]
+    return [plan.habit_name for plan in plans if _contains_term(source, plan.habit_name)]
 
 
 def _resolve_statuses(
@@ -275,15 +271,3 @@ def _parse_status(value: str) -> CheckInStatus | None:
         return CheckInStatus(value)
     except ValueError:
         return None
-
-
-def _day_start(day: date) -> datetime:
-    return datetime.combine(day, datetime.min.time(), tzinfo=get_app_timezone())
-
-
-def _app_datetime(value: datetime | None) -> datetime:
-    if value is None:
-        return datetime.now(get_app_timezone())
-    if value.tzinfo is None:
-        return value.replace(tzinfo=get_app_timezone())
-    return value.astimezone(get_app_timezone())

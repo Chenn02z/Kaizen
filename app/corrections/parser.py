@@ -91,9 +91,7 @@ def _looks_like_correction(text: str, habit_plans: Sequence[HabitPlanContext]) -
     if any(term in lower for term in _CORRECTION_TERMS):
         return True
     known_terms = {
-        item.casefold()
-        for plan in habit_plans
-        for item in [plan.habit_name, *plan.habit_aliases]
+        item.casefold() for plan in habit_plans for item in [plan.habit_name, *plan.habit_aliases]
     }
     return any(term in lower for term in known_terms) and "use that as evidence" in lower
 

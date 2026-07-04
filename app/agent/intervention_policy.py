@@ -39,9 +39,7 @@ class AgentInterventionDecision(BaseModel):
         return cls(
             action=state.get("decision", "silent"),
             reason=(
-                state.get("decision_reason")
-                or state.get("silence_reason")
-                or "agent decision"
+                state.get("decision_reason") or state.get("silence_reason") or "agent decision"
             ),
             message=state.get("reply_text"),
             technique=state.get("technique"),

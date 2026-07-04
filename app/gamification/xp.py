@@ -41,9 +41,7 @@ async def _has_streak(session: AsyncSession, telegram_user_id: int) -> bool:
             select(EFModel)
             .join(Log, Log.id == EFModel.log_id)
             .where(Log.telegram_user_id == telegram_user_id)
-            .where(
-                func.coalesce(Log.logged_date, func.date(Log.created_at)) == day
-            )
+            .where(func.coalesce(Log.logged_date, func.date(Log.created_at)) == day)
             .where(EFModel.adherence.in_(["yes", "partial"]))
         )
         if result.first() is None:

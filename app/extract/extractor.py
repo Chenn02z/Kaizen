@@ -41,14 +41,13 @@ async def extract(
 
 def _build_system(habit_plans: Sequence[HabitPlanContext] | None) -> str:
     from datetime import date as _date
+
     today = _date.today().isoformat()
     date_prefix = f"Current date: {today}. "
     if not habit_plans:
         return date_prefix + _BASE_SYSTEM + "habits should be a list of habit names."
     return (
-        date_prefix
-        + _BASE_SYSTEM
-        + "Use only habit names from the user's habit plan below. "
+        date_prefix + _BASE_SYSTEM + "Use only habit names from the user's habit plan below. "
         "Habit aliases and success conditions are soft context for matching. "
         "If the log is ambiguous or does not clearly satisfy a known habit, leave habits empty. "
         "Do not invent new habit names.\n\n"

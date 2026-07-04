@@ -105,9 +105,7 @@ async def test_habit_add_confirms_new_category_once(db_session) -> None:
     async with AsyncSessionLocal() as session:
         category_count = (
             await session.execute(
-                select(func.count())
-                .select_from(HabitCategory)
-                .where(HabitCategory.name == "MIND")
+                select(func.count()).select_from(HabitCategory).where(HabitCategory.name == "MIND")
             )
         ).scalar_one()
         plan = (
