@@ -280,7 +280,8 @@ async def test_tick_prompt_uses_corrected_habit_state(db_session, monkeypatch) -
 
     await run_tick(USER_ID, now=_today_at(13))
 
-    assert "read: done corrected" in captured["content"]
+    assert "read: done." in captured["content"]
+    assert "corrected=yes" in captured["content"]
 
 
 async def test_tick_prompt_uses_checkin_answered_missed_state(db_session, monkeypatch) -> None:
@@ -314,7 +315,9 @@ async def test_tick_prompt_uses_checkin_answered_missed_state(db_session, monkey
 
     await run_tick(USER_ID, now=_today_at(13))
 
-    assert "read: missing corrected" in captured["content"]
+    assert "read: missing." in captured["content"]
+    assert "corrected=yes" in captured["content"]
+    assert "checkin_answered=yes" in captured["content"]
 
 
 def test_proactive_lesson_query_uses_state_and_recent_pattern() -> None:

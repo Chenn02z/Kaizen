@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from app.config import get_app_timezone
 from app.db.models import CorpusChunk
 from app.llm.client import complete
 from app.memory.recall import detect_patterns, recall_history
@@ -24,6 +26,7 @@ class LogReplyInput(BaseModel):
     chunks: list[CorpusChunk]
     history: str = ""
     habit_state_summary: str = ""
+    today_logs: str = ""
     facts: Any | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -119,6 +122,7 @@ async def compose_log_reply(
     chunks: list[CorpusChunk],
     history: str = "",
     habit_state_summary: str = "",
+    today_logs: str = "",
 ) -> str:
     request = LogReplyInput(
         log_text=log_text,
@@ -126,16 +130,21 @@ async def compose_log_reply(
         chunks=chunks,
         history=history,
         habit_state_summary=habit_state_summary,
+        today_logs=today_logs,
     )
     if not request.chunks:
         return request.log_text
 
     context = _format_lessons(request.chunks, limit=2000)
     history_section = _format_history(request.history, limit=1500)
+    today_logs_section = _format_today_logs(request.today_logs, limit=1000)
     habit_state_section = _format_habit_state(request.habit_state_summary, limit=1500)
+    now = datetime.now(get_app_timezone())
+    time_line = now.strftime("Current time: %H:%M (%Z). ")
     system = (
         f"{_LOG_REPLY_SYSTEM}\n\n"
-        f"Techniques available:\n\n{context}{history_section}{habit_state_section}"
+        f"{time_line}Techniques available:\n\n{context}"
+        f"{today_logs_section}{history_section}{habit_state_section}"
     )
     response = await complete(
         messages=[{"role": "user", "content": request.log_text}],
@@ -202,6 +211,13 @@ def build_lesson_query(*, query: str, history: str, patterns: str) -> str:
     if pattern_part:
         parts.append(f"detected habit patterns: {pattern_part}")
     return "\n".join(parts)
+
+
+def _format_today_logs(today_logs: str, *, limit: int) -> str:
+    if not today_logs:
+        return ""
+    header = "\n\nToday's submitted logs (what the user has already logged today):\n"
+    return f"{header}{today_logs[:limit]}"
 
 
 def _format_lessons(chunks: list[CorpusChunk], *, limit: int) -> str:

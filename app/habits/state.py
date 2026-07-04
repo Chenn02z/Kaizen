@@ -45,6 +45,8 @@ class HabitReadState:
     agent_status: AgentHabitStatus
     is_corrected: bool
     is_checkin_answer: bool
+    expected_evidence_window: str
+    window_passed: bool
 
 
 @dataclass(frozen=True)
@@ -175,6 +177,8 @@ def _format_agent_habit_line(row: HabitReadState) -> str:
     parts = [
         f"cadence={cadence}",
         f"due_today={'yes' if row.cadence_due_today else 'no'}",
+        f"window={row.expected_evidence_window}",
+        f"window_passed={'yes' if row.window_passed else 'no'}",
     ]
     if row.cadence_type == "times_per_week":
         target = int(row.cadence_value or 0)
@@ -271,6 +275,8 @@ def _build_habit_read_state(
         and current_time >= _parse_window(plan.expected_evidence_window)
     )
 
+    window = _parse_window(plan.expected_evidence_window)
+    window_passed = current_time >= window
     return HabitReadState(
         habit_name=plan.habit_name,
         category_name=plan.category_name,
@@ -286,6 +292,8 @@ def _build_habit_read_state(
         agent_status=agent_status,
         is_corrected=bool(effective_state.corrected) if effective_state else False,
         is_checkin_answer=is_checkin_answer,
+        expected_evidence_window=plan.expected_evidence_window or "20:00",
+        window_passed=window_passed,
     )
 
 

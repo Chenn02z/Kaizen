@@ -132,9 +132,9 @@ async def decide(state: AgentState) -> AgentState:
     lessons_section = lessons_text[:2000]
 
     context = (
-        f"Today's effective habit state:\n{habit_state_summary[:1000]}\n\n"
+        f"Today's effective habit state:\n{habit_state_summary[:1600]}\n\n"
         f"User's recent behavioral history:\n{history_section}\n\n"
-        f"Lesson retrieval query:\n{lesson_query[:1000] or 'No concrete lesson query built.'}\n\n"
+        f"Lesson retrieval query:\n{lesson_query[:1200] or 'No concrete lesson query built.'}\n\n"
         f"Relevant self-authored lessons:\n{lessons_section or 'No lesson retrieved.'}"
     )
 
@@ -181,6 +181,7 @@ async def respond(state: AgentState) -> AgentState:
             chunks=chunks,
             history=history,
             habit_state_summary=state.get("habit_state_summary") or "",
+            today_logs=state.get("today_logs") or "",
         )
     except Exception:
         logger.exception("respond node failed")

@@ -15,7 +15,7 @@ from app.agent.intervention_policy import (
     InterventionPolicyContext,
 )
 from app.config import get_app_timezone
-from app.db.models import Intervention
+from app.db.models import Intervention, Log
 from app.db.session import AsyncSessionLocal
 from app.habits.plan import (
     due_habits_missing_evidence,
@@ -41,6 +41,26 @@ def _app_day_bounds(now: datetime | None) -> tuple[date, datetime, datetime]:
     return local_date, day_start, day_end
 
 
+async def _get_todays_log_text(
+    session: AsyncSession, telegram_user_id: int, now: datetime | None
+) -> str:
+    """Return today's log texts as a newline-delimited string, or empty if none."""
+    _, day_start, day_end = _app_day_bounds(now)
+    result = await session.execute(
+        select(Log.text)
+        .where(
+            Log.telegram_user_id == telegram_user_id,
+            Log.created_at >= day_start,
+            Log.created_at < day_end,
+        )
+        .order_by(Log.created_at)
+    )
+    texts = result.scalars().all()
+    if not texts:
+        return "No logs submitted yet today."
+    return "\n".join(texts)
+
+
 async def run_user_message(
     telegram_user_id: int,
     user_text: str,
@@ -55,6 +75,7 @@ async def run_user_message(
     graph = get_graph()
     async with AsyncSessionLocal() as session:
         habit_state_summary = await _build_habit_state_summary(session, telegram_user_id, now)
+        today_logs = await _get_todays_log_text(session, telegram_user_id, now)
     initial_state = {
         "event_kind": "user_message",
         "telegram_user_id": telegram_user_id,
@@ -63,6 +84,7 @@ async def run_user_message(
         "retrieved_chunks": [],
         "lesson_query": None,
         "history": "",
+        "today_logs": today_logs,
         "habit_state_summary": habit_state_summary,
         "decision": "respond",
         "reply_text": user_text,
@@ -183,6 +205,7 @@ async def _run_graph_intervention_decider(
         "retrieved_chunks": [],
         "lesson_query": None,
         "history": "",
+        "today_logs": "",
         "habit_state_summary": context.habit_state_summary,
         "decision": "silent",
         "reply_text": None,

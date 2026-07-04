@@ -1,3 +1,5 @@
+"""Agent state definition for the LangGraph state machine."""
+
 from typing import Any, Optional
 
 from typing_extensions import TypedDict
@@ -14,6 +16,7 @@ class AgentState(TypedDict, total=False):
     retrieved_chunks: list[Any]  # list[CorpusChunk]
     lesson_query: Optional[str]
     history: str
+    today_logs: str  # today's submitted log texts (delimited)
     habit_state_summary: str
 
     # Output fields
