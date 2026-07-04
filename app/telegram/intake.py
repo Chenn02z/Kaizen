@@ -183,6 +183,8 @@ async def _handle_log_message(message: TelegramIntakeMessage) -> IntakeOutcome:
         try:
             habit_plans = await get_habit_plan_context(session, message.telegram_user_id)
             facts = await extract(message.text, habit_plans)
+            if facts.logged_date is not None:
+                log.logged_date = facts.logged_date
             session.add(
                 ExtractedFactsModel(
                     log_id=log.id,

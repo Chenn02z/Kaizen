@@ -1,3 +1,4 @@
+from datetime import date
 from enum import Enum
 
 from pydantic import BaseModel
@@ -15,3 +16,4 @@ class ExtractedFacts(BaseModel):
     mood: str | None = None
     trigger: str | None = None
     context: str | None = None
+    logged_date: date | None = None

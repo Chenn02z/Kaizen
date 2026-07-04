@@ -45,13 +45,12 @@ async def _get_todays_log_text(
     session: AsyncSession, telegram_user_id: int, now: datetime | None
 ) -> str:
     """Return today's log texts as a newline-delimited string, or empty if none."""
-    _, day_start, day_end = _app_day_bounds(now)
+    local_date, _, _ = _app_day_bounds(now)
     result = await session.execute(
         select(Log.text)
         .where(
             Log.telegram_user_id == telegram_user_id,
-            Log.created_at >= day_start,
-            Log.created_at < day_end,
+            func.coalesce(Log.logged_date, func.date(Log.created_at)) == local_date,
         )
         .order_by(Log.created_at)
     )

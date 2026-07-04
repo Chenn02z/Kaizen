@@ -4,6 +4,8 @@ from app.memory.client import mem_add
 
 def _facts_to_text(facts: ExtractedFacts, log_text: str) -> str:
     parts = [f"User log: {log_text}"]
+    if facts.logged_date is not None:
+        parts.append(f"Date: {facts.logged_date.isoformat()}")
     if facts.habits:
         parts.append(f"Habits mentioned: {', '.join(facts.habits)}")
     if facts.adherence:

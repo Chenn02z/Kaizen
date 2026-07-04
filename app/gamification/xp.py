@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ExtractedFacts as EFModel
@@ -42,14 +42,7 @@ async def _has_streak(session: AsyncSession, telegram_user_id: int) -> bool:
             .join(Log, Log.id == EFModel.log_id)
             .where(Log.telegram_user_id == telegram_user_id)
             .where(
-                Log.created_at
-                >= datetime.combine(day, datetime.min.time()).replace(tzinfo=timezone.utc)
-            )
-            .where(
-                Log.created_at
-                < datetime.combine(day + timedelta(days=1), datetime.min.time()).replace(
-                    tzinfo=timezone.utc
-                )
+                func.coalesce(Log.logged_date, func.date(Log.created_at)) == day
             )
             .where(EFModel.adherence.in_(["yes", "partial"]))
         )

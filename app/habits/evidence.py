@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_app_timezone
@@ -44,6 +44,8 @@ class EffectiveHabitState:
 class EffectiveLogEvidence:
     log_id: int
     created_at: datetime
+    logged_date: date | None
+    effective_date: date
     text: str
     mood: str | None
     trigger: str | None
@@ -92,7 +94,7 @@ async def build_effective_evidence_ledger(
     logs: list[EffectiveLogEvidence] = []
 
     for log, facts in log_rows:
-        target_date = _app_date(log.created_at)
+        target_date = log.logged_date or _app_date(log.created_at)
         base_habits = list((facts.habits if facts else []) or [])
         candidate_habits = set(base_habits)
         candidate_habits.update(
@@ -121,10 +123,13 @@ async def build_effective_evidence_ledger(
             effective_habits.append(state)
             _merge_state(states_by_date, state)
 
+        effective_date = log.logged_date or _app_date(log.created_at)
         logs.append(
             EffectiveLogEvidence(
                 log_id=log.id,
                 created_at=log.created_at,
+                logged_date=log.logged_date,
+                effective_date=effective_date,
                 text=log.text,
                 mood=facts.mood if facts else None,
                 trigger=facts.trigger if facts else None,
@@ -276,9 +281,25 @@ async def _load_log_rows(
         .order_by(Log.created_at, Log.id)
     )
     if start_date is not None:
-        stmt = stmt.where(Log.created_at >= _day_start(start_date))
+        stmt = stmt.where(
+            or_(
+                Log.logged_date >= start_date,
+                and_(
+                    Log.logged_date.is_(None),
+                    Log.created_at >= _day_start(start_date),
+                ),
+            )
+        )
     if end_date is not None:
-        stmt = stmt.where(Log.created_at < _day_start(end_date + timedelta(days=1)))
+        stmt = stmt.where(
+            or_(
+                Log.logged_date <= end_date,
+                and_(
+                    Log.logged_date.is_(None),
+                    Log.created_at < _day_start(end_date + timedelta(days=1)),
+                ),
+            )
+        )
     result = await session.execute(stmt)
     return result.all()
 

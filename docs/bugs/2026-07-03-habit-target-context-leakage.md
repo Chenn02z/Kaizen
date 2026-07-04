@@ -1,6 +1,6 @@
 # Bug: chat replies can ignore habit targets and cadence
 
-Date: 2026-07-03
+Date: 2026-07-03 (DONE)
 
 ## Summary
 

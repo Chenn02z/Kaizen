@@ -9,6 +9,10 @@ _BASE_SYSTEM = (
     "Given a user's daily log entry, extract habit-related facts using the provided tool. "
     "If a field is not mentioned, omit it (use null). "
     "adherence is yes/no/partial based on whether habits were completed. "
+    "logged_date is the date the user is referring to in their message. "
+    "Resolve relative phrases like 'yesterday', 'last Tuesday', 'on 3rd Jan' "
+    "against the current date provided in the prompt. "
+    "If no date is mentioned or implied, leave logged_date null. "
 )
 
 _TOOL = {
@@ -36,10 +40,14 @@ async def extract(
 
 
 def _build_system(habit_plans: Sequence[HabitPlanContext] | None) -> str:
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    date_prefix = f"Current date: {today}. "
     if not habit_plans:
-        return _BASE_SYSTEM + "habits should be a list of habit names."
+        return date_prefix + _BASE_SYSTEM + "habits should be a list of habit names."
     return (
-        _BASE_SYSTEM
+        date_prefix
+        + _BASE_SYSTEM
         + "Use only habit names from the user's habit plan below. "
         "Habit aliases and success conditions are soft context for matching. "
         "If the log is ambiguous or does not clearly satisfy a known habit, leave habits empty. "

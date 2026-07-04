@@ -1,6 +1,6 @@
 # Bug: agent lacks day-boundary and time-of-day awareness in chat replies
 
-Date: 2026-07-04
+Date: 2026-07-04 (DONE)
 
 ## Summary (two related gaps)
 

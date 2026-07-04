@@ -52,6 +52,8 @@ class DashboardLog(BaseModel):
     id: int
     text: str
     created_at: datetime
+    logged_date: date | None = None
+    effective_date: date | None = None
     habits: list[str]
     adherence: str | None = None
     mood: str | None = None
@@ -156,11 +158,14 @@ async def _load_recent_logs(session: AsyncSession, telegram_user_id: int) -> lis
     )
     items: list[DashboardLog] = []
     for log, facts in result.all():
+        effective_date = log.logged_date or log.created_at.date()
         items.append(
             DashboardLog(
                 id=log.id,
                 text=log.text,
                 created_at=log.created_at,
+                logged_date=log.logged_date,
+                effective_date=effective_date,
                 habits=(facts.habits if facts else []) or [],
                 adherence=facts.adherence if facts else None,
                 mood=facts.mood if facts else None,
