@@ -52,7 +52,7 @@ async def test_run_user_message_passes_weekly_habit_state_into_reply_prompt(
 
     captured: dict[str, str] = {}
 
-    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+    async def fake_complete(messages, *, system=None, max_tokens=1024, output_format=None):
         captured["system"] = system or ""
         return _make_text_response("reply")
 

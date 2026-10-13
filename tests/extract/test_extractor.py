@@ -39,28 +39,22 @@ EXAMPLES = [
 ]
 
 
-def _make_tool_response(input_data: dict) -> MagicMock:
-    block = MagicMock()
-    block.type = "tool_use"
-    block.name = "extract_facts"
-    block.input = input_data
+def _make_parsed_response(input_data: dict) -> MagicMock:
     msg = MagicMock()
-    msg.content = [block]
+    msg.parsed_output = ExtractedFacts.model_validate(input_data)
     return msg
 
 
-def _make_text_response() -> MagicMock:
-    block = MagicMock()
-    block.type = "text"
+def _make_unparsed_response() -> MagicMock:
     msg = MagicMock()
-    msg.content = [block]
+    msg.parsed_output = None
     return msg
 
 
 # AC1: hand-written examples produce valid ExtractedFacts
 @pytest.mark.parametrize("example", EXAMPLES)
 async def test_extract_examples(example: dict, monkeypatch) -> None:
-    mock_complete = AsyncMock(return_value=_make_tool_response(example["expected"]))
+    mock_complete = AsyncMock(return_value=_make_parsed_response(example["expected"]))
     monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
 
     result = await extract(example["log"])
@@ -78,8 +72,8 @@ async def test_extract_examples(example: dict, monkeypatch) -> None:
 
 
 # AC3: malformed response raises ValidationError or ValueError
-async def test_malformed_response_no_tool_block(monkeypatch) -> None:
-    mock_complete = AsyncMock(return_value=_make_text_response())
+async def test_malformed_response_no_parsed_output(monkeypatch) -> None:
+    mock_complete = AsyncMock(return_value=_make_unparsed_response())
     monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
 
     with pytest.raises(ValueError):
@@ -88,7 +82,9 @@ async def test_malformed_response_no_tool_block(monkeypatch) -> None:
 
 async def test_malformed_response_invalid_adherence(monkeypatch) -> None:
     mock_complete = AsyncMock(
-        return_value=_make_tool_response({"habits": ["exercise"], "adherence": "invalid_value"})
+        side_effect=lambda **_: _make_parsed_response(
+            {"habits": ["exercise"], "adherence": "invalid_value"}
+        )
     )
     monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
 
@@ -109,7 +105,7 @@ async def test_extract_uses_habit_plan_context_and_filters_unknown_habits(monkey
         )
     ]
     mock_complete = AsyncMock(
-        return_value=_make_tool_response(
+        return_value=_make_parsed_response(
             {"habits": ["exercise", "read"], "adherence": "yes", "mood": "good"}
         )
     )
@@ -128,7 +124,7 @@ async def test_webhook_creates_extracted_facts_row(client, db_session, monkeypat
     from app.config import settings
 
     mock_complete = AsyncMock(
-        return_value=_make_tool_response({"habits": ["run"], "adherence": "yes"})
+        return_value=_make_parsed_response({"habits": ["run"], "adherence": "yes"})
     )
     monkeypatch.setattr("app.extract.extractor.complete", mock_complete)
 

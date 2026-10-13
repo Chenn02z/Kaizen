@@ -2,6 +2,7 @@ import os
 
 import anthropic
 import openai as _openai
+from pydantic import BaseModel
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.config import settings
@@ -32,9 +33,10 @@ async def complete(
     messages: list[dict],
     *,
     system: str | None = None,
-    tools: list[dict] | None = None,
     max_tokens: int = 1024,
+    output_format: type[BaseModel] | None = None,
 ) -> anthropic.types.Message:
+    """Call the model; with *output_format*, the response's parsed_output is that model."""
     kwargs: dict = {
         "model": settings.llm_model,
         "max_tokens": max_tokens,
@@ -42,10 +44,10 @@ async def complete(
     }
     if system:
         kwargs["system"] = system
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = {"type": "any"}
-    response = await _client.messages.create(**kwargs)
+    if output_format:
+        response = await _client.messages.parse(output_format=output_format, **kwargs)
+    else:
+        response = await _client.messages.create(**kwargs)
     # The bare @observe span records latency but cannot read token usage out of
     # an Anthropic Message; feed it in so Langfuse can attribute cost. Guard on
     # the key so the disabled path stays silent (no active span to update).

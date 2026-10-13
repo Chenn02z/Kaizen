@@ -6,7 +6,7 @@ from app.llm.client import complete
 
 _BASE_SYSTEM = (
     "You are a structured-data extractor for a personal habit-tracking app. "
-    "Given a user's daily log entry, extract habit-related facts using the provided tool. "
+    "Given a user's daily log entry, extract habit-related facts. "
     "If a field is not mentioned, omit it (use null). "
     "adherence is yes/no/partial based on whether habits were completed. "
     "logged_date is the date the user is referring to in their message. "
@@ -14,12 +14,6 @@ _BASE_SYSTEM = (
     "against the current date provided in the prompt. "
     "If no date is mentioned or implied, leave logged_date null. "
 )
-
-_TOOL = {
-    "name": "extract_facts",
-    "description": "Extract structured behavioral facts from the log entry.",
-    "input_schema": ExtractedFacts.model_json_schema(),
-}
 
 
 async def extract(
@@ -29,14 +23,12 @@ async def extract(
     response = await complete(
         messages=[{"role": "user", "content": log_text}],
         system=_build_system(habit_plans),
-        tools=[_TOOL],
         max_tokens=512,
+        output_format=ExtractedFacts,
     )
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "extract_facts":
-            facts = ExtractedFacts.model_validate(block.input)
-            return _filter_to_known_habits(facts, habit_plans)
-    raise ValueError("model did not return structured output")
+    if response.parsed_output is None:
+        raise ValueError("model did not return structured output")
+    return _filter_to_known_habits(response.parsed_output, habit_plans)
 
 
 def _build_system(habit_plans: Sequence[HabitPlanContext] | None) -> str:

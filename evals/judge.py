@@ -15,7 +15,7 @@ from evals.golden import Scenario
 
 _SYSTEM = (
     "You are a strict but fair grader for a behavior-change coaching AI. "
-    "Score the reply on exactly four boolean criteria using the provided tool. "
+    "Score the reply on exactly four boolean criteria. "
     "Base your judgment on the grading reference supplied in the user message."
 )
 
@@ -42,13 +42,6 @@ class JudgeScore(BaseModel):
     rationale: str
 
 
-_TOOL: dict = {
-    "name": "score_reply",
-    "description": "Return pass/fail for each rubric criterion plus a brief rationale.",
-    "input_schema": JudgeScore.model_json_schema(),
-}
-
-
 async def judge(scenario: Scenario, reply: str) -> JudgeScore:
     """Score *reply* against *scenario* using the LLM judge."""
     techs = scenario.expected_techniques
@@ -64,10 +57,9 @@ async def judge(scenario: Scenario, reply: str) -> JudgeScore:
     response = await complete(
         messages=[{"role": "user", "content": user_msg}],
         system=_SYSTEM,
-        tools=[_TOOL],
         max_tokens=512,
+        output_format=JudgeScore,
     )
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "score_reply":
-            return JudgeScore.model_validate(block.input)
-    raise ValueError("judge model did not return structured output")
+    if response.parsed_output is None:
+        raise ValueError("judge model did not return structured output")
+    return response.parsed_output

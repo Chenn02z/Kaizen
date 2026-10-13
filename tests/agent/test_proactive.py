@@ -7,6 +7,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
+from app.agent.graph import DecideIntervention
 from app.agent.runner import run_tick
 from app.config import get_app_timezone
 from app.db.models import HabitEvidenceOverride, Intervention
@@ -27,18 +28,11 @@ def _make_decide_response(
     technique: str | None = None,
     message: str | None = None,
 ) -> MagicMock:
-    """Build a fake Anthropic response containing a decide_intervention tool call."""
-    block = MagicMock()
-    block.type = "tool_use"
-    block.name = "decide_intervention"
-    block.input = {
-        "action": action,
-        "reason": reason,
-        "technique": technique,
-        "message": message,
-    }
+    """Build a fake Anthropic response with a parsed DecideIntervention."""
     resp = MagicMock()
-    resp.content = [block]
+    resp.parsed_output = DecideIntervention(
+        action=action, reason=reason, technique=technique, message=message
+    )
     return resp
 
 

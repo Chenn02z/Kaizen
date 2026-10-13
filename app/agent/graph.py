@@ -13,7 +13,7 @@ from app.rag.replies import compose_log_reply
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Pydantic schema for the decide_intervention tool call
+# Structured output schema for the decide node
 # ---------------------------------------------------------------------------
 
 
@@ -23,15 +23,6 @@ class DecideIntervention(BaseModel):
     technique: Optional[str] = None
     message: Optional[str] = None
 
-
-_DECIDE_TOOL: dict = {
-    "name": "decide_intervention",
-    "description": (
-        "Decide whether to send a proactive nudge to the user or stay silent. "
-        "Choose 'silent' when the user is on track or there is nothing useful to add."
-    ),
-    "input_schema": DecideIntervention.model_json_schema(),
-}
 
 _DECIDE_SYSTEM = (
     "You are Kaizen, a proactive behavior-change coach. "
@@ -43,8 +34,7 @@ _DECIDE_SYSTEM = (
     "Choose 'respond' only if you see a clear pattern of drift that a specific technique "
     "and one retrieved lesson can address. If the retrieved lessons do not fit the "
     "current state, choose 'silent'. When responding, name the technique, apply the "
-    "lesson to the user's recent pattern, and write a concise message (2-3 sentences). "
-    "Use the decide_intervention tool to record your decision."
+    "lesson to the user's recent pattern, and write a message short enough to read at a glance."
 )
 
 # ---------------------------------------------------------------------------
@@ -142,20 +132,19 @@ async def decide(state: AgentState) -> AgentState:
         response = await complete(
             messages=[{"role": "user", "content": context}],
             system=_DECIDE_SYSTEM,
-            tools=[_DECIDE_TOOL],
             max_tokens=512,
+            output_format=DecideIntervention,
         )
-        for block in response.content:
-            if block.type == "tool_use" and block.name == "decide_intervention":
-                decision = DecideIntervention.model_validate(block.input)
-                return {
-                    **state,
-                    "decision": decision.action,
-                    "reply_text": decision.message,
-                    "technique": decision.technique,
-                    "silence_reason": decision.reason if decision.action == "silent" else None,
-                    "decision_reason": decision.reason,
-                }
+        decision = response.parsed_output
+        if decision is not None:
+            return {
+                **state,
+                "decision": decision.action,
+                "reply_text": decision.message,
+                "technique": decision.technique,
+                "silence_reason": decision.reason if decision.action == "silent" else None,
+                "decision_reason": decision.reason,
+            }
     except Exception:
         logger.exception("decide node failed; defaulting to silent")
 

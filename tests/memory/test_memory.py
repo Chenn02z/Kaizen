@@ -96,7 +96,7 @@ async def test_answer_reflection_system_prompt_bounded(monkeypatch):
     fake_response = MagicMock()
     fake_response.content = [fake_block]
 
-    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+    async def fake_complete(messages, *, system=None, max_tokens=1024, output_format=None):
         captured_kwargs["system"] = system
         return fake_response
 
@@ -168,7 +168,7 @@ async def test_coaching_reflection_retrieves_lessons_after_history(monkeypatch):
     fake_response = MagicMock()
     fake_response.content = [fake_block]
 
-    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+    async def fake_complete(messages, *, system=None, max_tokens=1024, output_format=None):
         captured["system"] = system or ""
         return fake_response
 

@@ -1,4 +1,3 @@
-import json
 import logging
 
 from pydantic import BaseModel
@@ -14,6 +13,10 @@ logger = logging.getLogger(__name__)
 class _RerankScore(BaseModel):
     index: int
     score: float
+
+
+class _RerankScores(BaseModel):
+    scores: list[_RerankScore]
 
 
 async def retrieve(
@@ -45,27 +48,18 @@ async def _rerank(query: str, candidates: list[CorpusChunk], top_n: int) -> list
     snippets = "\n\n".join(f"[{i}] {c.content[:300]}" for i, c in enumerate(candidates))
     system = (
         "You are a relevance scorer. Given a user query and candidate passages, "
-        "return a JSON array of {index, score} objects where score is 1-10. "
-        "Return only valid JSON, no explanation."
+        "score every candidate's relevance to the query from 1 to 10."
     )
     user = f"Query: {query}\n\nCandidates:\n{snippets}"
 
-    response = await complete(
-        messages=[{"role": "user", "content": user}],
-        system=system,
-        max_tokens=256,
-    )
-
     try:
-        text_content = next(b.text for b in response.content if b.type == "text")
-        # The model may wrap the array in a markdown fence or prose; extract it.
-        start, end = text_content.find("["), text_content.rfind("]")
-        if start == -1 or end <= start:
-            raise ValueError("no JSON array in reranker output")
-        scores = [
-            _RerankScore.model_validate(item) for item in json.loads(text_content[start : end + 1])
-        ]
-        indexed = {s.index: s.score for s in scores}
+        response = await complete(
+            messages=[{"role": "user", "content": user}],
+            system=system,
+            max_tokens=256,
+            output_format=_RerankScores,
+        )
+        indexed = {s.index: s.score for s in response.parsed_output.scores}
         pos = {id(c): i for i, c in enumerate(candidates)}
         sorted_candidates = sorted(
             candidates,

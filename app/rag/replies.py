@@ -39,8 +39,8 @@ class ReflectionInput(BaseModel):
 
 _LOG_REPLY_SYSTEM = (
     "You are Kaizen, a personal behavior-change coach. "
-    "Use ONLY the provided behavioral-science techniques to give a specific, actionable reply. "
-    "Name the technique you are applying. Be concise (2-4 sentences). "
+    "Use only the provided behavioral-science techniques to give a specific, actionable reply. "
+    "Name the technique you are applying. Keep it short enough to read at a glance in Telegram. "
     "If the user's history shows a pattern relevant to this log, reference it. "
     "Treat the provided habit state as source-of-truth for cadence targets "
     "and whether a habit is due today. "
@@ -56,15 +56,15 @@ _COACHING_REFLECTION_SYSTEM = (
     "history and patterns as the reason for any advice. If a retrieved lesson fits "
     "that actual history, name its technique, apply one lesson, and explain why it "
     "fits this user's pattern. If no retrieved lesson fits, answer from history only "
-    "and do not force a technique. Be concise (3-5 sentences)."
+    "and do not force a technique. Keep it short enough to read at a glance in Telegram."
 )
 
 _DESCRIPTIVE_REFLECTION_SYSTEM = (
     "You are Kaizen, a personal behavior-change coach. "
-    "Answer the user's descriptive reflection question using ONLY the provided "
+    "Answer the user's descriptive reflection question using only the provided "
     "history and patterns. Do not introduce lessons or techniques unless the user "
-    "asks for a recommendation. Be specific and cite actual entries. Be concise "
-    "(3-5 sentences)."
+    "asks for a recommendation. Be specific and cite actual entries. Keep it short "
+    "enough to read at a glance in Telegram."
 )
 
 _REFLECTION_PATTERNS = [

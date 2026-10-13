@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.db.models import CorpusChunk
 from app.rag.replies import compose_log_reply
-from app.rag.retrieve import _rerank, retrieve
+from app.rag.retrieve import _rerank, _RerankScores, retrieve
 
 
 def _make_chunk(filename: str, content: str) -> CorpusChunk:
@@ -22,12 +22,11 @@ def _make_chunk(filename: str, content: str) -> CorpusChunk:
     return chunk
 
 
-def _make_text_response(json_text: str) -> MagicMock:
-    block = MagicMock()
-    block.type = "text"
-    block.text = json_text
+def _make_rerank_response(scores: list[float]) -> MagicMock:
     msg = MagicMock()
-    msg.content = [block]
+    msg.parsed_output = _RerankScores.model_validate(
+        {"scores": [{"index": i, "score": s} for i, s in enumerate(scores)]}
+    )
     return msg
 
 
@@ -56,9 +55,7 @@ async def test_retrieve_returns_chunks(monkeypatch) -> None:
     candidates = [impl_chunk, relapse_chunk, motivation_chunk]
 
     # Score order that keeps implementation_intentions first
-    rerank_response = _make_text_response(
-        '[{"index": 0, "score": 9}, {"index": 1, "score": 6}, {"index": 2, "score": 5}]'
-    )
+    rerank_response = _make_rerank_response([9, 6, 5])
     mock_complete = AsyncMock(return_value=rerank_response)
 
     # Mock the DB query result
@@ -100,10 +97,7 @@ async def test_rerank_changes_ordering(monkeypatch) -> None:
     chunk_c = _make_chunk("relapse_recovery.md", "Never miss twice after a lapse.")
 
     # Input order: a, b, c — scores invert: c=10, b=8, a=2
-    inverted_scores = (
-        '[{"index": 0, "score": 2}, {"index": 1, "score": 8}, {"index": 2, "score": 10}]'
-    )
-    mock_complete = AsyncMock(return_value=_make_text_response(inverted_scores))
+    mock_complete = AsyncMock(return_value=_make_rerank_response([2, 8, 10]))
     monkeypatch.setattr("app.rag.retrieve.complete", mock_complete)
 
     candidates = [chunk_a, chunk_b, chunk_c]
@@ -156,7 +150,7 @@ async def test_compose_log_reply_prompt_allows_no_fitting_lesson(monkeypatch) ->
     mock_response = MagicMock()
     mock_response.content = [mock_block]
 
-    async def fake_complete(messages, *, system=None, max_tokens=1024, tools=None):
+    async def fake_complete(messages, *, system=None, max_tokens=1024, output_format=None):
         captured["system"] = system or ""
         return mock_response
 

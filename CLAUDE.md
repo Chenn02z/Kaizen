@@ -1,6 +1,6 @@
-# AGENTS.md
+# CLAUDE.md
 
-Operating instructions for Codex working in this repo. Read this first, then
+Operating instructions for Claude Code working in this repo. Read this first, then
 read the relevant milestone spec under `docs/milestones/`. Product intent lives
 in `docs/PRODUCT.md`.
 
@@ -76,30 +76,13 @@ toolchain.
 - Logs are personal. Do not add third-party calls beyond the LLM provider,
   embeddings, and Langfuse without flagging it first.
 
-## Codex Workflows
+## Claude Code Workflows
 
-Repo-scoped skills live under `.agents/skills/`. Use them when the task matches
-their scope:
-
-- `$kaizen-milestone` for writing milestone specs and enforcing a consistent
-  template before implementation.
-- `$kaizen-loop` for milestone-driven execution that routes work to the
-  necessary repo skills and checks the result.
-- `$kaizen-backend` for FastAPI, Telegram, DB, migrations, config, and LLM
-  gateway work.
-- `$kaizen-rag` for corpus, embeddings, pgvector retrieval, reranking, and
-  grounded replies.
-- `$kaizen-agent` for LangGraph, memory, scheduler, and proactive intervention
-  logic.
-- `$kaizen-evals` for golden sets, judge rubrics, reports, and Langfuse
-  observability.
-- `$kaizen-frontend` for the Telegram Mini App and `/miniapp` serving glue.
-- `$teach` for repo-grounded lessons, learning records, and interview-oriented
-  explanations tied to Kaizen work.
-
-Custom Codex subagents live under `.codex/agents/`. Use subagents only when the
-user explicitly asks for parallel/delegated agent work. The reviewer agent is
-read-only and suitable before considering significant work done.
+Custom subagents live under `.claude/agents/` (`explorer`, `spec-planner`,
+`spec-griller`, `implementer`, `test-runner`, `reviewer`, `doc-curator`). Use
+subagents only when the user explicitly asks for parallel/delegated agent work.
+The reviewer agent is read-only and suitable before considering significant
+work done.
 
 ## Definition Of Done
 

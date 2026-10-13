@@ -1,4 +1,4 @@
-"""AC: judge() returns a valid JudgeScore from a mocked complete() tool_use response."""
+"""AC: judge() returns a valid JudgeScore from a mocked complete() parsed response."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -6,13 +6,9 @@ from evals.golden import Scenario
 from evals.judge import JudgeScore, judge
 
 
-def _make_tool_response(input_data: dict) -> MagicMock:
-    block = MagicMock()
-    block.type = "tool_use"
-    block.name = "score_reply"
-    block.input = input_data
+def _make_parsed_response(input_data: dict) -> MagicMock:
     msg = MagicMock()
-    msg.content = [block]
+    msg.parsed_output = JudgeScore.model_validate(input_data)
     return msg
 
 
@@ -24,7 +20,7 @@ async def test_judge_returns_valid_score(monkeypatch) -> None:
         "actionable": False,
         "rationale": "Good technique reference but no next step given.",
     }
-    mock_complete = AsyncMock(return_value=_make_tool_response(payload))
+    mock_complete = AsyncMock(return_value=_make_parsed_response(payload))
     monkeypatch.setattr("evals.judge.complete", mock_complete)
 
     scenario = Scenario(
