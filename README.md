@@ -8,12 +8,12 @@ not change my behavior. I built Kaizen to live in Telegram, where logging is
 low-friction and accountability can reach me in the flow of daily life.
 
 The product goal is not generic AI coaching. Kaizen should take natural-language
-logs, turn them into structured behavioral history, surface a read-only Telegram
-dashboard, remember personal patterns, and send a context-aware `nudge` when I
+logs, turn them into structured behavioral history, surface a read-only Google
+Sheets dashboard, remember personal patterns, and send a context-aware `nudge` when I
 am starting to slip.
 
-Tech stack: FastAPI, LangGraph, PostgreSQL + pgvector, Mem0, and a React-based
-Telegram Mini App.
+Tech stack: FastAPI, LangGraph, PostgreSQL + pgvector (Supabase), Mem0, and
+Langfuse, hosted on an Oracle Cloud VM.
 
 ## What Kaizen is for
 
@@ -26,26 +26,17 @@ Telegram Mini App.
 
 ```bash
 cp .env.example .env          # fill in TELEGRAM_TOKEN, ALLOWED_USER_ID, TELEGRAM_WEBHOOK_SECRET, LLM_API_KEY, EMBED_API_KEY
-docker compose up -d db       # start Postgres (pgvector/pg16) on localhost:5432
+docker compose up -d db       # local Postgres (pgvector/pg16) on localhost:5432
 uv sync                       # install deps
 uv run alembic upgrade head   # create all tables (logs, extracted_facts, corpus_chunks, gamification, interventions)
 uv run python -m app.rag.load # embed the behavioral-science corpus into pgvector (see below)
 uv run uvicorn app.main:app --reload
 ```
 
-## Telegram dashboard
+## Deployment
 
-The Mini App is the main review surface. To make it open correctly inside
-Telegram:
-
-1. Set `PUBLIC_URL` in `.env` to your HTTPS deployment URL.
-2. In BotFather, register that HTTPS origin as the bot's Mini App domain.
-3. Restart the FastAPI app so `setChatMenuButton` runs on startup.
-4. Use `/start`, `/dashboard`, or the bot menu button to open the read-only
-   dashboard in Telegram.
-
-For a hosted deployment, use the AWS EC2 + RDS checklist in
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Production runs the app on an Oracle Cloud VM (systemd + Caddy for HTTPS) and
+the database on Supabase. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Correction loop
 
@@ -114,34 +105,17 @@ idempotent — each chunk is content-hashed, so re-running only re-embeds files
 that changed. Run it after editing any corpus file. Retrieval (`app/rag/`)
 returns empty until this has been run at least once.
 
-## Mini App (Telegram dashboard)
-
-The stats dashboard is a React + Vite app in `webapp/`, served by FastAPI at
-`/miniapp`. Build it once before starting the API:
-
-```bash
-cd webapp && npm install && npm run build   # outputs webapp/dist/, served at /miniapp
-```
-
-For live frontend dev with hot reload, run `npm run dev` in `webapp/` (it proxies
-`/dashboard` to the API on `localhost:8000`). The API serves `/miniapp` only when a
-build exists; without one it returns HTTP 503.
-
 ## Register the Telegram webhook (local dev)
 
 ```bash
-# Expose local port via ngrok
 ngrok http 8000
-
-# Register with Telegram — replace <TOKEN>, <NGROK_URL>, and <SECRET>
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
-  -d "url=https://<NGROK_URL>/webhook" \
-  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+# set PUBLIC_URL=https://<ngrok-host> in .env, then start the app
 ```
 
-The `secret_token` value must match `TELEGRAM_WEBHOOK_SECRET` in your `.env`.
-Telegram sends it in the `X-Telegram-Bot-Api-Secret-Token` header on every
-update; the server rejects requests that omit or mismatch it with HTTP 403.
+On startup the app calls `setWebhook` with `PUBLIC_URL/webhook` and
+`TELEGRAM_WEBHOOK_SECRET`. Telegram sends that secret in the
+`X-Telegram-Bot-Api-Secret-Token` header on every update; the server rejects
+requests that omit or mismatch it with HTTP 403.
 
 ## Run tests
 

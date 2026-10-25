@@ -1,228 +1,167 @@
-# Deployment
+# Deployment: Oracle Cloud + Supabase
 
-Kaizen needs an always-on HTTPS web service plus persistent PostgreSQL with
-pgvector. Static hosting is not enough because Telegram sends updates to the
-FastAPI webhook, the scheduler runs with the API process, and the Telegram Mini
-App is served from the same public origin.
+Production shape:
 
-The learning-oriented deployment target is AWS:
+- **Supabase** hosts PostgreSQL + pgvector: logs, facts, habit state,
+  interventions, RAG corpus embeddings, and Mem0 memories.
+- **Oracle Cloud Always Free VM** runs FastAPI, the in-process scheduler, and
+  Caddy (automatic HTTPS) in front of Uvicorn.
+- Telegram and iPhone Shortcuts post to `https://<host>/webhook`.
 
-- EC2 runs FastAPI, the in-process scheduler, and the built Telegram Mini App.
-- RDS PostgreSQL stores logs, facts, habit state, interventions, and pgvector
-  corpus embeddings.
-- Nginx terminates public HTTP/HTTPS and proxies to Uvicorn on localhost.
-- `scripts/deploy-build.sh` installs Python dependencies and builds `webapp/dist`.
-- `scripts/aws-ec2-bootstrap.sh` installs runtime packages, runs migrations,
-  loads the RAG corpus, and installs the systemd service.
+The code side is done. The steps below need your accounts, so they are yours to
+run. Do them in order; each ends with a check.
 
-This is the smallest AWS shape that teaches useful primitives without forcing a
-serverless rewrite.
+## Decisions already made
 
-## Cost Guardrails
+| Question | Decision | Why |
+|---|---|---|
+| Region | Supabase `ap-southeast-1` (Singapore) and Oracle's Singapore region | Matches `APP_TIMEZONE`; same region keeps DB round-trips in single-digit ms. Oracle's home region is fixed at signup, so if yours isn't Singapore, pick the Supabase region closest to it. |
+| Which Supabase connection | **Session pooler**, port 5432 | The direct host is IPv6-only (Oracle VCNs default to IPv4). The transaction pooler (6543) breaks asyncpg prepared statements. |
+| Domain | `<public-ip-with-dashes>.sslip.io` | Free, no DNS setup, and Let's Encrypt accepts it. Swap for a real domain any time by changing `KAIZEN_HOST` and `PUBLIC_URL`. |
+| Mem0 | Self-hosted on Supabase pgvector (`MEM0_API_KEY` empty) | Keeps memories in your own DB with no extra third party. Hosted Mem0 memories are not migrated; memory starts fresh. |
+| Supabase Data API | **Off** | The app connects to Postgres directly. Leaving the REST API on would expose `public` tables to anyone holding the anon key. |
+| Webhook registration | Automatic on startup when `PUBLIC_URL` is set | No manual `curl setWebhook`. |
+| Supabase free-tier pausing | Not a concern | Projects pause after 7 days of no activity; scheduler ticks hit the DB three times a day. |
 
-AWS is feasible for learning, but "Free Tier" is not the same as "free forever."
-Before creating resources:
+## 1. Supabase
 
-1. Create a billing budget and alert.
-2. Use one EC2 instance and one RDS PostgreSQL instance.
-3. Avoid NAT Gateway, Application Load Balancer, ECS, and multi-AZ RDS for v1.
-4. Allow EC2 inbound `22` only from your IP, and `80`/`443` from the internet.
-5. Allow RDS inbound `5432` only from the EC2 security group.
-6. Stop or delete unused resources when experimenting.
+1. Create a project at <https://supabase.com/dashboard>: region Singapore, and a
+   strong DB password you save in a password manager.
+2. **Project Settings → Data API**: turn the Data API off.
+3. **Connect** (top bar) → **Session pooler** → copy the URI. It looks like
+   `postgresql://postgres.<ref>:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres`.
+4. Fill in the password and append `?sslmode=require`. URL-encode special
+   characters in the password (`@` → `%40`, `#` → `%23`, `/` → `%2F`).
+   That string is your `DATABASE_URL`.
 
-Expect possible charges for public IPv4 addresses and usage beyond free credits
-or free-tier limits.
+No manual SQL is needed: the first migration runs
+`CREATE EXTENSION IF NOT EXISTS vector`, and Mem0 creates its own table.
 
-## 1. Create AWS Resources
+**Check:** from your laptop, run
+`DATABASE_URL='<url>' uv run alembic upgrade head`. It should print every
+migration with no error. (Or let the VM do it in step 3.)
 
-Use one region consistently. `ap-southeast-1` keeps the server close to the
-current `APP_TIMEZONE=Asia/Singapore`; `us-east-1` is often cheaper and has broad
-free-tier availability.
-
-Create:
-
-- EC2 Ubuntu LTS instance, `t3.micro` or `t4g.micro` if eligible.
-- RDS PostgreSQL, `db.t3.micro` or `db.t4g.micro` if eligible.
-- Database name: `kaizen`.
-- RDS master user: a secret value, not committed to the repo.
-- EC2 security group: inbound `22`, `80`, `443`.
-- RDS security group: inbound `5432` from the EC2 security group only.
-
-Do not make RDS publicly accessible unless you intentionally want to practice
-public database hardening. The app only needs EC2-to-RDS traffic.
-
-## 2. Prepare DNS
-
-Telegram webhooks and Mini Apps need HTTPS. Point a domain such as
-`kaizen.example.com` at the EC2 public IP.
-
-Set `PUBLIC_URL` to the final HTTPS origin, for example
-`https://kaizen.example.com`. Do not include a trailing slash.
-
-## 3. Configure Environment
-
-Create `/opt/kaizen/.env` on the EC2 instance from `.env.example`.
-
-Required production values:
+**Optional, if you have data on the old AWS RDS:**
 
 ```bash
-TELEGRAM_TOKEN=
-ALLOWED_USER_ID=
-DATABASE_URL=postgresql+asyncpg://<user>:<password>@<rds-endpoint>:5432/kaizen
-TELEGRAM_WEBHOOK_SECRET=
-LLM_API_KEY=
-LLM_MODEL=claude-haiku-4-5-20251001
-EMBED_API_KEY=
-EMBED_MODEL=text-embedding-3-small
-PUBLIC_URL=https://kaizen.example.com
-MINIAPP_SECRET=
-SCHEDULER_SECRET=
-APP_TIMEZONE=Asia/Singapore
+pg_dump --no-owner --no-acl -Fc "<old RDS url>" -f kaizen.dump
+pg_restore --no-owner --no-acl -d "<supabase session pooler url>" kaizen.dump
 ```
 
-Optional:
+Do this instead of running `alembic upgrade head` on an empty database, then
+run `alembic upgrade head` afterwards to apply any newer migrations.
+
+## 2. Oracle VM
+
+1. **Upgrade the account to Pay As You Go** (Billing → Upgrade). Always Free
+   resources stay $0, and Oracle stops reclaiming "idle" free VMs, which a
+   mostly idle bot would otherwise be. Set a budget alert of $1 while you're
+   there.
+2. **Compute → Instances → Create**:
+   - Image: Canonical Ubuntu 24.04
+   - Shape: `VM.Standard.A1.Flex` (Ampere ARM), 1 OCPU / 6 GB is plenty
+     (Always Free allows up to 4 / 24)
+   - Networking: create a new VCN with a public subnet, and assign a public IPv4
+     address
+   - Add your SSH public key
+   - If you get "Out of capacity", try another availability domain or retry
+     later. The x86 `VM.Standard.E2.1.Micro` also works but only has 1 GB RAM.
+3. **Networking → VCN → Security Lists → Default**: add ingress rules for
+   TCP **80** and **443** from `0.0.0.0/0`. (The bootstrap script opens the same
+   ports in the VM's own iptables.)
+4. Note the public IP, e.g. `140.245.1.2` → host `140-245-1-2.sslip.io`.
+
+**Check:** `ssh ubuntu@<ip>` works.
+
+## 3. Install Kaizen on the VM
 
 ```bash
-LANGFUSE_PUBLIC_KEY=
-LANGFUSE_SECRET_KEY=
-LANGFUSE_HOST=https://cloud.langfuse.com
-MEM0_API_KEY=
+ssh ubuntu@<ip>
+sudo mkdir -p /opt/kaizen && sudo chown ubuntu:ubuntu /opt/kaizen
+git clone <your repo url> /opt/kaizen/app
 ```
 
-If `MEM0_API_KEY` is empty, the memory adapter uses the local fallback path,
-which is fine for early testing but weaker than persistent hosted memory.
+If the repo is private, first create a deploy key: `ssh-keygen -t ed25519` on the
+VM, then add `~/.ssh/id_ed25519.pub` under GitHub repo → Settings → Deploy keys
+(read-only), and clone with the `git@github.com:` URL.
 
-## 4. Install Kaizen on EC2
+Create `/opt/kaizen/.env` from `.env.example` (`nano /opt/kaizen/.env`, then
+`chmod 600 /opt/kaizen/.env`):
 
-Clone the repo to `/opt/kaizen/Kaizen` and run the bootstrap:
+| Key | Value |
+|---|---|
+| `TELEGRAM_TOKEN` | from BotFather (same bot as before) |
+| `ALLOWED_USER_ID` | your Telegram user ID |
+| `TELEGRAM_WEBHOOK_SECRET` | new random value: `openssl rand -hex 32` |
+| `DATABASE_URL` | Supabase session pooler URL from step 1 |
+| `LLM_API_KEY`, `EMBED_API_KEY` | same as local |
+| `LLM_MODEL` | leave empty to use the default, or set explicitly |
+| `LANGFUSE_*` | same as local |
+| `PUBLIC_URL` | `https://140-245-1-2.sslip.io` (no trailing slash) |
+| `SCHEDULER_SECRET` | `openssl rand -hex 32` |
+| `MEM0_API_KEY` | **leave empty** |
+| `APP_TIMEZONE` | `Asia/Singapore` |
+
+Then run:
 
 ```bash
-sudo mkdir -p /opt/kaizen
-sudo chown -R ubuntu:ubuntu /opt/kaizen
-git clone <repo-url> /opt/kaizen/Kaizen
-cd /opt/kaizen/Kaizen
-bash scripts/aws-ec2-bootstrap.sh
+cd /opt/kaizen/app
+KAIZEN_HOST=140-245-1-2.sslip.io bash scripts/oracle-bootstrap.sh
 ```
 
-The bootstrap runs:
+This installs Caddy and uv, opens ports 80/443, installs the systemd units, and
+runs `scripts/deploy.sh` (dependency sync → migrations → corpus embedding →
+restart). uv downloads Python 3.12 itself.
 
-- dependency install with `uv`
-- Mini App production build
-- Alembic migrations, including `CREATE EXTENSION IF NOT EXISTS vector`
-- idempotent RAG corpus embedding load
-- systemd service install and restart
+**Check:**
 
-Useful service commands:
+- The script ends with `{"status":"ok"} kaizen is up`.
+- `curl https://140-245-1-2.sslip.io/health` from your laptop returns
+  `{"status":"ok"}`. The first request may take ~10 s while Caddy gets the
+  certificate.
+- `curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"` shows your URL and
+  no `last_error_message`.
+- Send the bot `/start`, and then a log like "did gym".
 
-```bash
-sudo systemctl status kaizen
-sudo journalctl -u kaizen -f
-sudo systemctl restart kaizen
+## 4. Retire AWS
+
+When the bot works on Oracle, terminate the EC2 instance and delete the RDS
+instance, any snapshots, and any Elastic IPs so billing stops. Your local
+`.env.production` still points at EC2; update or delete it.
+
+## 5. iPhone Shortcuts
+
+Point every Shortcut that posts to the old EC2 URL at the new `PUBLIC_URL`.
+
+## Day-to-day operations
+
+| Task | Command (on the VM) |
+|---|---|
+| Ship a new version | `bash /opt/kaizen/app/scripts/deploy.sh` |
+| Logs | `journalctl -u kaizen -f` |
+| Restart | `sudo systemctl restart kaizen` |
+| Manual proactive tick | `curl -X POST -H "X-Scheduler-Secret: $SECRET" http://127.0.0.1:8000/scheduler/tick` |
+
+Backups: the Supabase free plan has no downloadable backups. For a nightly
+dump on the VM, install a `postgresql-client` at least as new as your Supabase
+Postgres version (Settings → Infrastructure shows it; Ubuntu's default client may
+be older, so use the PGDG apt repo). Then add this line with `crontab -e`:
+
+```
+0 3 * * * pg_dump "$(grep ^DATABASE_URL= /opt/kaizen/.env | cut -d= -f2-)" -Fc -f /opt/kaizen/backup-$(date +\%a).dump
 ```
 
-The provided systemd unit assumes the default Ubuntu EC2 user and the repository
-path `/opt/kaizen/Kaizen`. If you use a different user or path, update
-`deploy/aws/kaizen.service` before running the bootstrap.
+That keeps a rolling 7 days of dumps.
 
-## 4b. Deploying After a Push
+## Later: Google Sheets and Google Health
 
-After you push backend or product changes to production, deploy from the Ubuntu
-host with the same environment file the service uses:
+These are build-order steps 4 and 5 in `docs/DIRECTION.md`. They aren't
+implemented yet, so nothing is needed now. When you build them, you'll need:
 
-```bash
-cd /opt/kaizen/Kaizen
-set -a
-source /opt/kaizen/.env
-set +a
-git pull
-uv run alembic upgrade head
-sudo systemctl restart kaizen
-```
+- **Sheets:** a Google Cloud project with the Sheets API enabled, a service
+  account with a JSON key, and the target sheet shared with the service
+  account's email as Editor.
+- **Google Health:** an OAuth client in the same project with the Google Health
+  API enabled, and a one-time consent flow to get a refresh token.
 
-If the change includes Mini App frontend work, rebuild the webapp first:
-
-```bash
-cd /opt/kaizen/Kaizen/webapp
-npm install
-npm run build
-cd ..
-sudo systemctl restart kaizen
-```
-
-Notes:
-
-- `uv run alembic upgrade head` needs the production env vars because
-  `alembic/env.py` imports `app.config.settings` at startup.
-- Keep `/opt/kaizen/.env` in sync with production secrets; the systemd service
-  reads that file at runtime.
-- Restart only one Kaizen instance. The scheduler runs inside the web process,
-  so multiple live copies would create duplicate tickers.
-
-## 5. Configure Nginx and TLS
-
-On EC2, copy the Nginx example and replace `kaizen.example.com` with your real
-domain:
-
-```bash
-sudo cp deploy/aws/nginx.conf.example /etc/nginx/sites-available/kaizen
-sudo ln -s /etc/nginx/sites-available/kaizen /etc/nginx/sites-enabled/kaizen
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Install Certbot and issue the certificate:
-
-```bash
-sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d kaizen.example.com
-```
-
-## 6. Confirm the Deploy
-
-```bash
-curl https://kaizen.example.com/health
-```
-
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-Also open `https://kaizen.example.com/miniapp`. It should return the built Mini
-App instead of `503`.
-
-## 7. Register Telegram
-
-Register the webhook with the same `TELEGRAM_WEBHOOK_SECRET` stored in
-`/opt/kaizen/.env`:
-
-```bash
-curl "https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook" \
-  -d "url=<PUBLIC_URL>/webhook" \
-  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
-```
-
-Telegram sends that value back as `X-Telegram-Bot-Api-Secret-Token`; Kaizen
-rejects webhook calls without it.
-
-In BotFather, set the Mini App domain to the public HTTPS host. Then restart the
-service so startup registers the bot menu button using `PUBLIC_URL`:
-
-```bash
-sudo systemctl restart kaizen
-```
-
-## 8. Smoke Test
-
-1. Send `/start` to the bot from the allowed Telegram account.
-2. Confirm the reply contains an `Open Dashboard` Mini App button.
-3. Send a normal `log`, such as `read for 20 minutes and went to the gym`.
-4. Confirm the bot replies and `logs` has a new row in RDS.
-5. Open the dashboard from Telegram and confirm the recent log appears.
-
-If `/start` says the dashboard is not configured, set `PUBLIC_URL` in
-`/opt/kaizen/.env` and restart `kaizen`.
-
-Keep only one running Kaizen web process while the scheduler is in-process;
-running multiple app instances would make multiple schedulers eligible to fire.
+Keys go in `/opt/kaizen/.env`, and new settings get added to `.env.example`.

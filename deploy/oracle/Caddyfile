@@ -1,0 +1,6 @@
+# Caddy obtains and renews the Let's Encrypt certificate automatically.
+# Replace the host with your domain, or <public-ip-with-dashes>.sslip.io.
+{$KAIZEN_HOST} {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

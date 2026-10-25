@@ -6,7 +6,6 @@ import pytest  # noqa: F401 — used by pytest.mark.asyncio
 
 from app.db.models import UserProgress
 from app.extract.schema import Adherence, ExtractedFacts
-from app.gamification.stats import UserStats
 from app.gamification.xp import award_xp, level_for_xp
 
 # ---------------------------------------------------------------------------
@@ -111,48 +110,3 @@ async def test_streak_bonus(db_session) -> None:
 
     # 50 XP (yes, 1 habit) + 10 streak bonus = 60
     assert result.xp_gained == 60
-
-
-# ---------------------------------------------------------------------------
-# AC4: GET /me keeps the compatibility progress payload
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_me_progress_endpoint_remains_compatible(client, db_session) -> None:
-    """GET /me returns valid progress JSON after awarding XP."""
-    from app.config import settings
-
-    facts = ExtractedFacts(habits=["yoga"], adherence=Adherence.yes)
-    with patch("app.gamification.xp._has_streak", new=AsyncMock(return_value=False)):
-        await award_xp(facts, telegram_user_id=settings.allowed_user_id, session=db_session)
-    await db_session.commit()
-
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    response = await client.get("/me", params=params)
-    assert response.status_code == 200
-    data = response.json()
-    stats = UserStats.model_validate(data)
-    assert stats.xp == 50
-    assert stats.level == 1
-    assert len(stats.habits) == 1
-    assert stats.habits[0].name == "yoga"
-
-
-# ---------------------------------------------------------------------------
-# AC5: GET /miniapp serves the built Mini App shell
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_miniapp_serves_spa(client, tmp_path, monkeypatch) -> None:
-    # Point at a fake build so the test is hermetic (real dist/ is gitignored).
-    (tmp_path / "index.html").write_text(
-        '<div id="root"></div><script src="/miniapp/assets/index.js"></script>'
-    )
-    monkeypatch.setattr("app.main._WEBAPP_DIST", tmp_path)
-
-    response = await client.get("/miniapp")
-    assert response.status_code == 200
-    assert '<div id="root">' in response.text
-    assert "/miniapp/assets/" in response.text

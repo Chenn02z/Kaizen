@@ -1,14 +1,19 @@
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.dashboard import DashboardData
+from app.dashboard import DashboardData, get_dashboard_data
 from app.db.models import ExtractedFacts, HabitEvidenceOverride, Intervention, Log
 from app.db.session import AsyncSessionLocal
 
 USER_ID = settings.allowed_user_id
 
 
-async def test_dashboard_endpoint_returns_read_model(
+async def _dashboard() -> DashboardData:
+    async with AsyncSessionLocal() as session:
+        return await get_dashboard_data(settings.allowed_user_id, session)
+
+
+async def test_dashboard_returns_read_model(
     client,
     db_session,
     monkeypatch,
@@ -83,11 +88,7 @@ async def test_dashboard_endpoint_returns_read_model(
         )
         await session.commit()
 
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    response = await client.get("/dashboard", params=params)
-    assert response.status_code == 200
-    data = response.json()
-    dashboard = DashboardData.model_validate(data)
+    dashboard = await _dashboard()
 
     habits = {habit.name: habit for habit in dashboard.habits}
     assert habits["leetcode"].today_status == "done"
@@ -150,10 +151,7 @@ async def test_dashboard_reveals_corrected_habit_state(
         )
         await session.commit()
 
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    response = await client.get("/dashboard", params=params)
-    assert response.status_code == 200
-    dashboard = DashboardData.model_validate(response.json())
+    dashboard = await _dashboard()
 
     habits = {habit.name: habit for habit in dashboard.habits}
     assert habits["gym"].today_status == "done"

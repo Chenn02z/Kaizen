@@ -384,5 +384,5 @@ async def test_scheduler_tick_endpoint_rejects_without_secret(monkeypatch) -> No
         assert resp_no_secret.status_code == 403
 
         # Wrong secret
-        resp_wrong = await c.post("/scheduler/tick?secret=wrong")
+        resp_wrong = await c.post("/scheduler/tick", headers={"X-Scheduler-Secret": "wrong"})
         assert resp_wrong.status_code == 403

@@ -16,12 +16,12 @@ from app.db.models import Base  # noqa: E402
 
 target_metadata = Base.metadata
 
-# Pull DATABASE_URL from settings and adapt it for the sync psycopg2 driver
-# (Alembic migrations run synchronously; the app uses asyncpg at runtime)
-from app.config import settings  # noqa: E402
+# Alembic migrations run synchronously on psycopg2; the app uses asyncpg at runtime.
+from app.config import settings, sync_database_url  # noqa: E402
 
-_sync_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
-config.set_main_option("sqlalchemy.url", _sync_url)
+# Escape % so URL-encoded passwords survive ConfigParser interpolation.
+_sync_url = sync_database_url(settings.database_url)
+config.set_main_option("sqlalchemy.url", _sync_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

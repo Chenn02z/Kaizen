@@ -6,17 +6,22 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.config import get_app_timezone, settings
-from app.dashboard import DashboardData
+from app.dashboard import DashboardData, get_dashboard_data
 from app.db.models import ExtractedFacts, HabitEvidenceOverride, Intervention, Log, UserProgress
 from app.db.session import AsyncSessionLocal
 from app.extract.schema import ExtractedFacts as ExtractedFactsSchema
 from app.main import app, get_send_message
-from app.telegram.webapp import dashboard_inline_keyboard
+from app.telegram.intake import DASHBOARD_REPLY
 
 VALID_HEADERS = {"X-Telegram-Bot-Api-Secret-Token": settings.telegram_webhook_secret}
 
 ALLOWED_UID = settings.allowed_user_id
 OTHER_UID = ALLOWED_UID + 1
+
+
+async def _dashboard() -> DashboardData:
+    async with AsyncSessionLocal() as session:
+        return await get_dashboard_data(settings.allowed_user_id, session)
 
 
 def _today_at(hour: int) -> datetime:
@@ -186,12 +191,11 @@ async def test_reflection_query_uses_reflection_path(
 
 
 @pytest.mark.asyncio
-async def test_dashboard_command_launches_webapp_and_skips_log(
+async def test_dashboard_command_replies_and_skips_log(
     client: AsyncClient,
     db_session,
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(settings, "public_url", "https://example.com")
     mock_send = AsyncMock()
     app.dependency_overrides[get_send_message] = lambda: mock_send
 
@@ -208,20 +212,18 @@ async def test_dashboard_command_launches_webapp_and_skips_log(
     assert await _log_count() == 0
     mock_send.assert_awaited_once_with(
         chat_id=ALLOWED_UID,
-        text="Open your dashboard:",
-        reply_markup=dashboard_inline_keyboard(),
+        text=DASHBOARD_REPLY,
     )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["/start", "/app"])
-async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
+async def test_dashboard_alias_commands_reply_and_skip_log(
     client: AsyncClient,
     db_session,
     monkeypatch,
     command: str,
 ) -> None:
-    monkeypatch.setattr(settings, "public_url", "https://example.com")
     mock_send = AsyncMock()
     app.dependency_overrides[get_send_message] = lambda: mock_send
 
@@ -238,8 +240,7 @@ async def test_dashboard_alias_commands_launch_webapp_and_skip_log(
     assert await _log_count() == 0
     mock_send.assert_awaited_once_with(
         chat_id=ALLOWED_UID,
-        text="Open your dashboard:",
-        reply_markup=dashboard_inline_keyboard(),
+        text=DASHBOARD_REPLY,
     )
 
 
@@ -309,8 +310,7 @@ async def test_single_habit_checkin_yes_updates_state_without_log(
     assert progress.xp == 50
     assert checkin.engaged is True
 
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    dashboard = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    dashboard = await _dashboard()
     habits = {habit.name: habit for habit in dashboard.habits}
     assert habits["read"].today_status == "done"
     assert habits["read"].is_corrected_today is True
@@ -354,8 +354,7 @@ async def test_single_habit_checkin_partial_awards_partial_xp(
     assert override.override_status == "partial"
     assert progress.xp == 20
 
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    dashboard = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    dashboard = await _dashboard()
     assert {habit.name: habit for habit in dashboard.habits}["read"].today_status == "done"
 
 
@@ -546,8 +545,7 @@ async def test_false_negative_correction_updates_dashboard_and_keeps_audit_rows(
         )
         await session.commit()
 
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    before = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    before = await _dashboard()
     before_habits = {habit.name: habit for habit in before.habits}
     assert before_habits["gym"].today_status == "missing"
 
@@ -567,7 +565,7 @@ async def test_false_negative_correction_updates_dashboard_and_keeps_audit_rows(
     assert await _override_count() == 1
     mock_send.assert_awaited_once()
 
-    after = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    after = await _dashboard()
     after_habits = {habit.name: habit for habit in after.habits}
     assert after_habits["gym"].today_status == "done"
     assert after_habits["gym"].is_corrected_today is True
@@ -619,8 +617,7 @@ async def test_false_positive_correction_removes_completion_credit(
 
     assert response.status_code == 200
     assert await _override_count() == 1
-    params = {"secret": settings.miniapp_secret} if settings.miniapp_secret else None
-    after = DashboardData.model_validate((await client.get("/dashboard", params=params)).json())
+    after = await _dashboard()
     after_habits = {habit.name: habit for habit in after.habits}
     assert after_habits["gym"].today_status == "missing"
 

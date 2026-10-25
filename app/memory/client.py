@@ -1,6 +1,6 @@
 from mem0 import Memory, MemoryClient
 
-from app.config import settings
+from app.config import settings, sync_database_url
 
 _memory: Memory | MemoryClient | None = None
 
@@ -22,6 +22,14 @@ def get_memory() -> Memory | MemoryClient:
                         "config": {
                             "model": settings.embed_model,
                             "api_key": settings.embed_api_key,
+                        },
+                    },
+                    # Reuse the app's Postgres (Supabase) so memories survive restarts.
+                    "vector_store": {
+                        "provider": "pgvector",
+                        "config": {
+                            "connection_string": sync_database_url(settings.database_url),
+                            "collection_name": "mem0_memories",
                         },
                     },
                 }

@@ -18,7 +18,7 @@ measurable results, and clean commit history matter as much as features.
 
 Telegram -> FastAPI webhook -> LangGraph agent loop. The agent calls structured
 extraction, RAG retrieval, and memory tools. PostgreSQL with pgvector persists
-state. A scheduler wakes the agent on a cadence; the agent reasons over recent
+state. An in-process APScheduler wakes the agent on a cadence; the agent reasons over recent
 state and decides whether a proactive nudge adds value. Langfuse traces model
 calls.
 
@@ -35,8 +35,9 @@ calls.
 - Pydantic v2 validates structured LLM output and API bodies.
 - Langfuse provides observability.
 - Tooling: `uv`, `ruff`, `pytest`, and `pytest-asyncio`.
-- Frontend: Telegram Mini App in `webapp/` using React, TypeScript, Vite,
-  `@telegram-apps/sdk-react`, and `@telegram-apps/telegram-ui`.
+- Dashboard: a Google Sheet rewritten nightly by the backend (no frontend code).
+- Hosting: the app runs on an Oracle Cloud VM (systemd + Caddy, see `deploy/oracle/`);
+  PostgreSQL + pgvector is hosted on Supabase. Local dev uses `docker compose up -d db`.
 
 ## Commands
 
@@ -77,6 +78,4 @@ uv run ruff format .
    run is reported.
 3. `uv run ruff check .` is clean for Python changes, or the reason it could not
    be run is reported.
-4. For frontend changes, `npm run build` in `webapp/` passes, or the reason it
-   could not be run is reported.
-5. The diff is surgical and every changed line traces to the task.
+4. The diff is surgical and every changed line traces to the task.

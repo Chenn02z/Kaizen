@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,6 @@ from app.habits.evidence import recompute_progress_from_effective_state
 from app.habits.plan import HabitPlanContext, get_habit_plan_context
 from app.memory.store import store_facts
 from app.rag.replies import answer_reflection, is_reflection_query
-from app.telegram.webapp import dashboard_inline_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,6 @@ class TelegramIntakeMessage:
 class TelegramReply:
     chat_id: int
     text: str
-    reply_markup: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -53,15 +51,9 @@ class IntakeOutcome:
         return cls(handled=True)
 
     @classmethod
-    def reply(
-        cls,
-        *,
-        chat_id: int,
-        text: str,
-        reply_markup: dict[str, Any] | None = None,
-    ) -> "IntakeOutcome":
+    def reply(cls, *, chat_id: int, text: str) -> "IntakeOutcome":
         return cls(
-            replies=(TelegramReply(chat_id=chat_id, text=text, reply_markup=reply_markup),),
+            replies=(TelegramReply(chat_id=chat_id, text=text),),
             handled=True,
         )
 
@@ -122,18 +114,15 @@ async def handle_message(message: TelegramIntakeMessage) -> IntakeOutcome:
     return await _handle_log_message(message)
 
 
+DASHBOARD_REPLY = (
+    "Kaizen is listening. Log anything in plain text. "
+    "Your dashboard is the Google Sheet, rewritten nightly. "
+    "Commands: /habits, /habit_add, /habit_edit."
+)
+
+
 def _dashboard_reply(chat_id: int) -> IntakeOutcome:
-    reply_markup = dashboard_inline_keyboard()
-    if reply_markup is None:
-        return IntakeOutcome.reply(
-            chat_id=chat_id,
-            text="Kaizen dashboard is not configured yet. Set PUBLIC_URL to your HTTPS deployment.",
-        )
-    return IntakeOutcome.reply(
-        chat_id=chat_id,
-        text="Open your dashboard:",
-        reply_markup=reply_markup,
-    )
+    return IntakeOutcome.reply(chat_id=chat_id, text=DASHBOARD_REPLY)
 
 
 async def _handle_habit_command(
