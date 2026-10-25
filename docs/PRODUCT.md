@@ -1,8 +1,9 @@
 # Kaizen Product Requirements
 
-Owner: solo builder | Status: in progress | Last updated: 2026-07-04
+Owner: solo builder | Status: in progress | Last updated: 2026-10-25
 
-This is the product contract for Kaizen.
+This is the product contract for Kaizen. The concrete habit list, inputs, and
+build order live in `docs/DIRECTION.md`.
 
 ## Product Summary
 
@@ -27,6 +28,15 @@ must all be load-bearing.
 
 ## User Experience Requirements
 
+- Kaizen tracks a fixed habit list (gym, run, weigh-in, sleep, LeetCode,
+  system design, doomscrolling). Inputs are one-tap iPhone Shortcut buttons,
+  short Telegram sentences, on-device Shortcuts automations, and the Google
+  Health API. Every log gets a one-line confirmation with weekly progress.
+- LeetCode sentences are parsed into problem, pattern, difficulty, and
+  struggle; Kaizen saves immediately, asks at most one optional follow-up, and
+  schedules re-solves at +3, +10, and +30 days.
+- Kaizen sends one morning brief per day: sleep vs target, social-app opens,
+  today's gym split, one LeetCode pick, and weekly progress.
 - The user can send a freeform Telegram `log` such as "rough day, skipped gym,
   doomscrolled until 2am" without filling out forms.
 - Kaizen stores each `log`, extracts typed facts, and maps clear evidence to
@@ -49,8 +59,8 @@ must all be load-bearing.
   to intervene. It must respect `quiet hours`, enforce a daily cap, and stay
   silent when appropriate. Proactive ticks may use retrieved `lesson`s to choose
   the intervention strategy, but they must not become generic lesson broadcasts.
-- The Telegram Mini App is the read-only dashboard for weekly habit evidence,
-  today's habit state, recent logs, and recorded `intervention`s.
+- A Google Sheet, rewritten nightly by the backend, is the read-only
+  dashboard with `Weekly` and `Daily` tabs. It replaces the Telegram Mini App.
 - Progress feedback is secondary to the core accountability loop: log,
   understand, reflect, intervene. Weekly habit evidence is the primary progress
   surface; XP and levels may remain as internal compatibility infrastructure
@@ -85,6 +95,9 @@ must all be load-bearing.
 - Dashboard: backend read models, not React-only inference, derive habit status
   from persisted logs, extracted facts, habit plans, evidence overrides, and
   interventions.
+- Integrations: Google Health API for sleep, Google Sheets API for the
+  dashboard, and Shortcuts posts to the webhook for buttons, weight, and
+  social-app opens.
 - Observability: Langfuse traces model calls with latency, token usage, and
   cost.
 
@@ -105,7 +118,8 @@ must all be load-bearing.
 
 V1 is single-user, Telegram-first, and read-only for dashboard habit review. It
 does not include multi-user accounts, social features, clinical claims, native
-mobile apps, wearable integrations, or habit editing inside the Mini App.
+mobile apps, or habit editing inside the dashboard. Wearable data is limited
+to sleep via the Google Health API.
 
 The product bar is simple: if the LLM were removed and the feature would still
 work just as well, the AI is decorative. Redesign the feature until the model is
