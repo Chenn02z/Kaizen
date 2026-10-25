@@ -2,8 +2,7 @@
 
 Owner: solo builder | Status: in progress | Last updated: 2026-07-04
 
-This is the product contract for Kaizen. Milestone execution lives in
-`docs/milestones/`; canonical terminology lives in `docs/CONTEXT.md`.
+This is the product contract for Kaizen.
 
 ## Product Summary
 
@@ -87,7 +86,7 @@ must all be load-bearing.
   from persisted logs, extracted facts, habit plans, evidence overrides, and
   interventions.
 - Observability: Langfuse traces model calls with latency, token usage, and
-  cost; evals provide reproducible quality signals.
+  cost.
 
 ## Success Metrics
 

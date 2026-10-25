@@ -1,7 +1,6 @@
 # CLAUDE.md
 
-Operating instructions for Claude Code working in this repo. Read this first, then
-read the relevant milestone spec under `docs/milestones/`. Product intent lives
+Operating instructions for Claude Code working in this repo. Product intent lives
 in `docs/PRODUCT.md`.
 
 ## Project: Kaizen
@@ -52,10 +51,6 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-If a command does not exist yet, the repo is probably in an early milestone.
-Create the expected command as part of that milestone; do not invent a different
-toolchain.
-
 ## Repository Rules
 
 - Keep changes surgical. Touch only what the task requires and match existing
@@ -69,24 +64,15 @@ toolchain.
   Never commit `.env`; keep `.env.example` current when config changes.
 - The bot serves exactly one Telegram user ID from config. Reject other users.
 - Schema changes go through Alembic migrations, not manual DDL.
-- Tests track milestone acceptance criteria. A milestone is not done until the
-  relevant tests pass.
+- Changes are not done until the relevant tests pass.
 - Default to the cheapest model that meets the bar; cache embeddings and cap
   proactive messages per day where required.
 - Logs are personal. Do not add third-party calls beyond the LLM provider,
   embeddings, and Langfuse without flagging it first.
 
-## Claude Code Workflows
-
-Custom subagents live under `.claude/agents/` (`explorer`, `spec-planner`,
-`spec-griller`, `implementer`, `test-runner`, `reviewer`, `doc-curator`). Use
-subagents only when the user explicitly asks for parallel/delegated agent work.
-The reviewer agent is read-only and suitable before considering significant
-work done.
-
 ## Definition Of Done
 
-1. Acceptance criteria for the relevant milestone are met and covered by tests.
+1. The change is covered by tests.
 2. `uv run pytest` passes for the touched area, or the reason it could not be
    run is reported.
 3. `uv run ruff check .` is clean for Python changes, or the reason it could not
